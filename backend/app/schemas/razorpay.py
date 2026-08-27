@@ -17,16 +17,6 @@ class RazorpayErrorInfo(BaseModel):
     reason: str | None = None
 
 
-class RazorpayCustomer(BaseModel):
-    """Customer fields accepted from or returned by a payment link."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str | None = None
-    email: str | None = None
-    contact: str | None = None
-
-
 class RazorpayPayment(BaseModel):
     """The provider payment subset used by Reclaim."""
 
@@ -41,17 +31,3 @@ class RazorpayPayment(BaseModel):
     captured: bool | None = None
     error: RazorpayErrorInfo | None = None
     created_at: datetime | None = None
-
-
-class RazorpayPaymentLink(BaseModel):
-    """The provider payment-link subset used by Reclaim."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    amount: int = Field(ge=0)
-    currency: str
-    status: str
-    short_url: str | None = None
-    description: str | None = None
-    customer: RazorpayCustomer | None = None

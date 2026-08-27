@@ -1,0 +1,153 @@
+"""Orchestrate recovery evaluation without executing external actions."""
+
+from __future__ import annotations
+
+import hashlib
+from datetime import UTC, datetime
+import threading
+from typing import Protocol
+
+from app.schemas import (
+    CustomerRiskContext,
+    MerchantPolicy,
+    PaymentRiskInput,
+    RecoveryHistory,
+)
+from app.schemas.razorpay import RazorpayPayment
+from app.schemas.workflow import RecoveryActionResult, RecoveryEvent, RecoveryWorkflowResponse
+from app.services.llm_client import FakeLLMClient, LLMClient, OpenAICompatibleLLMClient
+from app.services.recovery_context import build_recovery_context
+from app.services.recovery_decision import RecoveryDecisionService
+from app.services.revenue_risk import RevenueRiskEngine
+from app.services.razorpay_client import RazorpayClient
+
+
+class WorkflowPaymentClient(Protocol):
+    """Minimal provider boundary needed when an event omits payment evidence."""
+
+    def fetch_payment(self, payment_id: str) -> RazorpayPayment:
+        """Retrieve one normalized payment."""
+
+
+class RecoveryWorkflowService:
+    """Evaluate authenticated events and return dry-run action requests."""
+
+    def __init__(
+        self,
+        payment_client: WorkflowPaymentClient | None = None,
+        llm_client: LLMClient | None = None,
+        policy: MerchantPolicy | None = None,
+    ) -> None:
+        self._payment_client = payment_client
+        self._llm_client = llm_client
+        self._policy = policy or MerchantPolicy()
+        self._processed: dict[str, RecoveryWorkflowResponse] = {}
+        self._lock = threading.Lock()
+
+    def process(self, event: RecoveryEvent) -> RecoveryWorkflowResponse:
+        """Evaluate one event and return the cached result for duplicates."""
+        event_id = event.event_id or self._derived_event_id(event)
+        with self._lock:
+            previous = self._processed.get(event_id)
+        if previous is not None:
+            return previous.model_copy(update={"duplicate": True})
+
+        payment, customer = self._build_inputs(event)
+        history = RecoveryHistory(recovery_attempt_count=event.recovery_attempt_count)
+        risk_result = RevenueRiskEngine().evaluate(payment, customer, history, self._policy)
+        context = build_recovery_context(payment, customer, history, risk_result, self._policy)
+        decision = RecoveryDecisionService(self._decision_client()).decide(context)
+        result = self._action_result(decision.action, decision.payment_id)
+        response = RecoveryWorkflowResponse.from_decision(event_id, decision, result)
+
+        with self._lock:
+            existing = self._processed.setdefault(event_id, response)
+        if existing is not response:
+            return existing.model_copy(update={"duplicate": True})
+        return response
+
+    def clear_idempotency(self) -> None:
+        """Clear process-local event state for tests and local development."""
+        with self._lock:
+            self._processed.clear()
+
+    def _decision_client(self) -> LLMClient:
+        if self._llm_client is not None:
+            return self._llm_client
+        try:
+            return OpenAICompatibleLLMClient.from_environment()
+        except Exception:
+            return FakeLLMClient()
+
+    def _build_inputs(
+        self, event: RecoveryEvent
+    ) -> tuple[PaymentRiskInput, CustomerRiskContext]:
+        if event.payment is not None:
+            if event.payment.payment_id != event.payment_id:
+                raise ValueError("payment_id must match payment.payment_id")
+            payment = event.payment
+        else:
+            provider_payment = self._provider().fetch_payment(event.payment_id)
+            payment = self._payment_from_provider(provider_payment, event.timestamp)
+
+        customer = event.customer or CustomerRiskContext(
+            customer_id=f"unknown:{event.payment_id}",
+            customer_age_days=0,
+            previous_successful_payments=0,
+            previous_failed_payments=0,
+            previous_recovery_attempts=0,
+            customer_lifetime_value=0,
+            average_previous_payment=0,
+            recent_payment_frequency=0,
+        )
+        return payment, customer
+
+    def _provider(self) -> WorkflowPaymentClient:
+        return self._payment_client or RazorpayClient.from_settings()
+
+    @staticmethod
+    def _payment_from_provider(
+        payment: RazorpayPayment, event_timestamp: datetime
+    ) -> PaymentRiskInput:
+        method = payment.method or "card"
+        if method not in {"upi", "card", "netbanking", "wallet"}:
+            raise ValueError("Razorpay payment method is not supported by the risk engine")
+        failed_at = payment.created_at or event_timestamp
+        elapsed_hours = max(
+            0, int((event_timestamp - failed_at).total_seconds() // 3600)
+        )
+        status = "successful" if payment.status.lower() in {"captured", "successful"} else payment.status
+        return PaymentRiskInput(
+            payment_id=payment.id,
+            amount=payment.amount,
+            currency=payment.currency,
+            payment_method=method,
+            status=status,
+            failure_reason=payment.error.code if payment.error else None,
+            failed_at=failed_at,
+            time_since_failure_hours=elapsed_hours,
+        )
+
+    @staticmethod
+    def _action_result(action: str, payment_id: str) -> RecoveryActionResult:
+        messages = {
+            "RETRY": "A payment retry would be requested; no payment operation was performed.",
+            "PAYMENT_LINK": "A payment link would be requested; no link was created or sent.",
+            "REMINDER": "A customer reminder would be requested; no notification was sent.",
+            "ESCALATE": "Merchant escalation would be requested for review.",
+            "STOP": "Recovery is stopped; no external action was requested.",
+        }
+        return RecoveryActionResult(
+            payment_id=payment_id,
+            action=action,
+            status="terminal" if action == "STOP" else "queued",
+            message=messages[action],
+        )
+
+    @staticmethod
+    def _derived_event_id(event: RecoveryEvent) -> str:
+        digest = hashlib.sha256(event.model_dump_json().encode("utf-8")).hexdigest()
+        return f"derived-{digest}"
+
+
+workflow_service = RecoveryWorkflowService()

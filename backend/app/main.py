@@ -8,11 +8,22 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.workflows import router as workflow_router
 from app.config import settings
 from app.database import get_db
 from app.schemas import DatabaseHealthResponse, ServiceHealthResponse
 from app.schemas import RazorpayPayment
-from app.services.razorpay_client import RazorpayClient, RazorpayClientError
+from app.services.razorpay_client import (
+    RazorpayAuthenticationError,
+    RazorpayClient,
+    RazorpayClientError,
+    RazorpayInvalidRequestError,
+    RazorpayMalformedResponseError,
+    RazorpayNetworkError,
+    RazorpayNotFoundError,
+    RazorpayRateLimitError,
+    RazorpayUpstreamError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +36,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(workflow_router)
 
 
 @app.get("/health", response_model=ServiceHealthResponse)
@@ -66,6 +78,21 @@ def razorpay_payment(
     """Return one normalized Razorpay payment without executing any payment."""
     try:
         return client.fetch_payment(payment_id)
+    except RazorpayNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except RazorpayInvalidRequestError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except RazorpayRateLimitError as error:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(error)) from error
+    except RazorpayAuthenticationError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    except (RazorpayNetworkError, RazorpayUpstreamError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(error),
+        ) from error
+    except RazorpayMalformedResponseError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
     except RazorpayClientError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

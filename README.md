@@ -2,7 +2,7 @@
 
 An autonomous revenue recovery platform for merchants, being built for the Razorpay AI Buildathon (Track 03: AI Revenue Recovery).
 
-**Current status:** Day 1 foundation.
+**Current status:** Tasks 1-5B complete; recovery actions remain dry-run only.
 
 ## Planned tech stack
 
@@ -87,6 +87,10 @@ python -m app.cli.recovery_decision --index 0 --fake
 ```
 
 For a live, OpenAI-compatible provider call, set `RECOVERY_LLM_API_KEY`, `RECOVERY_LLM_MODEL`, and optionally `RECOVERY_LLM_BASE_URL`. The provider only returns a recommendation; the deterministic validator still enforces policy and no payment or workflow is executed. The versioned system prompt is at [`docs/prompts/recovery-agent.md`](docs/prompts/recovery-agent.md).
+
+## n8n recovery orchestration
+
+Task 5B adds an authenticated `POST /api/workflows/recovery` endpoint and an importable n8n workflow. The backend remains the source of truth for risk, eligibility, policy, and validated recovery decisions. All five action branches return dry-run results. See [`docs/n8n-recovery-workflow.md`](docs/n8n-recovery-workflow.md).
 
 ## Environment variables
 

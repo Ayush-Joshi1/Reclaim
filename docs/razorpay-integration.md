@@ -1,6 +1,6 @@
 # Razorpay Test Mode Integration
 
-Reclaim's Razorpay integration is an isolated HTTP adapter. The client translates Razorpay responses into a small set of internal Pydantic models; recovery and database services do not depend on Razorpay response shapes. Task 5A only reads payments and creates payment links. It does not execute payments or start recovery workflows.
+Reclaim's Razorpay integration is an isolated HTTP adapter. The client translates Razorpay responses into a small internal Pydantic model; recovery and database services do not depend on Razorpay response shapes. Task 5A only reads one payment at a time and does not execute payments or start recovery workflows.
 
 ## Environment variables
 
@@ -9,10 +9,10 @@ Set these in the backend process environment or in the local `.env` file:
 ```text
 RAZORPAY_KEY_ID=your_test_key_id
 RAZORPAY_KEY_SECRET=your_test_key_secret
-RAZORPAY_BASE_URL=https://api.razorpay.com
+RAZORPAY_BASE_URL=https://api.razorpay.com/v1
 ```
 
-Use Test Mode credentials from the Razorpay Dashboard. `RAZORPAY_BASE_URL` defaults to `https://api.razorpay.com`. Never commit `.env` or put a key secret in logs, responses, tests, or documentation.
+Use Test Mode credentials from the Razorpay Dashboard. `RAZORPAY_BASE_URL` defaults to `https://api.razorpay.com/v1`. Never commit `.env` or put a key secret in logs, responses, tests, or documentation.
 
 ## Test Mode setup
 
@@ -30,15 +30,9 @@ GET /api/integrations/razorpay/payments/{payment_id}
 
 It returns normalized fields such as `id`, `order_id`, `amount`, `currency`, `status`, `method`, `captured`, `error`, and `created_at`. It never returns credentials or the complete provider response.
 
-## Client methods
+## Client method
 
-`RazorpayClient` provides:
-
-- `fetch_payment(payment_id)` to fetch one normalized payment.
-- `fetch_payments(...)` to fetch a normalized payment list with optional pagination and timestamp filters.
-- `create_payment_link(...)` to create a payment link from an amount, currency, description, and optional customer details.
-
-The client uses HTTP Basic Authentication, an explicit 10-second timeout, and no automatic retries. No method executes a payment.
+`RazorpayClient.fetch_payment(payment_id)` fetches one normalized payment. The client uses HTTP Basic Authentication, an explicit 10-second timeout, and no automatic retries.
 
 ## Error handling
 
@@ -56,7 +50,9 @@ The FastAPI payment endpoint exposes provider failures as safe HTTP errors. Miss
 
 ## Testing strategy
 
-The test suite uses `httpx.MockTransport` for every Razorpay call. It verifies successful fetch, listing, and payment-link creation, Basic Auth, status-code mapping, timeout and network handling, malformed responses, endpoint normalization, and that the test secret cannot appear in errors or responses. The suite never contacts Razorpay.
+The test suite uses `httpx.MockTransport` for every Razorpay call. It verifies successful fetch, Basic Auth, endpoint construction, status-code mapping, timeout and network handling, malformed responses, missing configuration, endpoint normalization, and that the test secret cannot appear in errors or responses. The suite never contacts Razorpay.
+
+Task 5A intentionally does not implement payment retries, captures, refunds, payment links, webhooks, persistence, background workers, or frontend integration.
 
 Run the focused tests from `backend/`:
 

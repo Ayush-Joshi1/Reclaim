@@ -1,8 +1,11 @@
 """Application configuration."""
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class ConfigurationError(RuntimeError):
     """Raised when required application configuration is missing or invalid."""
@@ -16,7 +19,8 @@ class Settings:
     database_url: str = ""
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
-    razorpay_base_url: str = "https://api.razorpay.com"
+    razorpay_base_url: str = "https://api.razorpay.com/v1"
+    reclaim_workflow_secret: str = ""
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -30,7 +34,8 @@ class Settings:
             database_url=database_url,
             razorpay_key_id=os.getenv("RAZORPAY_KEY_ID", ""),
             razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET", ""),
-            razorpay_base_url=os.getenv("RAZORPAY_BASE_URL", "https://api.razorpay.com"),
+            razorpay_base_url=os.getenv("RAZORPAY_BASE_URL", "https://api.razorpay.com/v1"),
+            reclaim_workflow_secret=os.getenv("RECLAIM_WORKFLOW_SECRET", ""),
         )
 
 

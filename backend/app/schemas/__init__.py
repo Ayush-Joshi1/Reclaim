@@ -14,7 +14,8 @@ from app.schemas.recovery_decision import (
     RecoveryRiskContext,
     ValidatedRecoveryDecision,
 )
-from app.schemas.razorpay import RazorpayCustomer, RazorpayErrorInfo, RazorpayPayment, RazorpayPaymentLink
+from app.schemas.razorpay import RazorpayErrorInfo, RazorpayPayment
+from app.schemas.workflow import RecoveryActionResult, RecoveryEvent, RecoveryWorkflowResponse
 
 __all__ = [
     "CustomerRiskContext",
@@ -25,10 +26,11 @@ __all__ = [
     "RecoveryDecision",
     "RecoveryHistory",
     "RecoveryRiskContext",
-    "RazorpayCustomer",
     "RazorpayErrorInfo",
     "RazorpayPayment",
-    "RazorpayPaymentLink",
+    "RecoveryActionResult",
+    "RecoveryEvent",
+    "RecoveryWorkflowResponse",
     "RevenueRiskResult",
     "ServiceHealthResponse",
     "ValidatedRecoveryDecision",

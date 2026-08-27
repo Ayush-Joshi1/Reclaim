@@ -1,0 +1,682 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reclaim-recovery",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "85e77fb1-1425-43db-b630-8200c3d20ec7",
+      "name": "Recovery Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3792,
+        288
+      ],
+      "webhookId": "reclaim-recovery-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst b = (item && item.body) ? item.body : (item || {});\nconst payment = (b && b.payment && typeof b.payment === \"object\") ? b.payment : {};\nconst customer = (b && b.customer && typeof b.customer === \"object\") ? b.customer : {};\n\nconst ALLOWED_EVENT_TYPES = [\"payment_failed\"];\nconst ALLOWED_METHODS = [\"card\", \"upi\", \"netbanking\", \"wallet\", \"bank_transfer\"];\n\nconst errors = [];\n\nfunction present(v) {\n  return v !== undefined && v !== null && v !== \"\";\n}\nfunction isNum(v) {\n  return v !== null && v !== undefined && v !== \"\" && !isNaN(Number(v));\n}\nfunction num(v) {\n  return isNum(v) ? Number(v) : v;\n}\n\n// Derive payment_id from top level or nested payment\nconst paymentId = present(b.payment_id) ? b.payment_id\n  : (present(payment.payment_id) ? payment.payment_id : null);\n\n// Top-level required fields\nconst topRequired = [\"event_id\", \"event_type\", \"timestamp\", \"source\", \"recovery_attempt_count\"];\nfor (const f of topRequired) {\n  if (!present(b[f]) && b[f] !== 0) errors.push(\"Missing field: \" + f);\n}\nif (!paymentId) errors.push(\"Missing field: payment_id\");\nif (!b.payment || typeof b.payment !== \"object\") errors.push(\"Missing field: payment\");\nif (!b.customer || typeof b.customer !== \"object\") errors.push(\"Missing field: customer\");\n\n// Payment required fields\nconst paymentRequired = [\"amount\", \"currency\", \"status\", \"payment_method\", \"failed_at\", \"time_since_failure_hours\"];\nfor (const f of paymentRequired) {\n  if (!present(payment[f]) && payment[f] !== 0) errors.push(\"Missing payment field: \" + f);\n}\n\n// Customer required fields\nconst customerRequired = [\"customer_id\", \"notification_count\", \"customer_age_days\", \"previous_successful_payments\", \"previous_failed_payments\", \"previous_recovery_attempts\", \"customer_lifetime_value\", \"average_previous_payment\", \"recent_payment_frequency\"];\nfor (const f of customerRequired) {\n  if (!present(customer[f]) && customer[f] !== 0) errors.push(\"Missing customer field: \" + f);\n}\n\n// Allowed-value checks\nconst eventType = String(b.event_type || \"\").toLowerCase();\nif (present(b.event_type) && !ALLOWED_EVENT_TYPES.includes(eventType)) {\n  errors.push(\"Invalid event_type: \" + b.event_type);\n}\nconst method = String(payment.payment_method || \"\").toLowerCase();\nif (present(payment.payment_method) && !ALLOWED_METHODS.includes(method)) {\n  errors.push(\"Invalid payment_method: \" + payment.payment_method);\n}\n\n// Currency: max 3 chars, normalized to uppercase\nconst currency = String(payment.currency || \"\").toUpperCase();\nif (present(payment.currency) && (currency.length < 1 || currency.length > 3)) {\n  errors.push(\"Invalid currency: \" + payment.currency);\n}\n\n// ISO datetime checks\nfunction isIso(v) {\n  if (!present(v)) return false;\n  const d = new Date(v);\n  return !isNaN(d.getTime());\n}\nif (present(b.timestamp) && !isIso(b.timestamp)) errors.push(\"Invalid timestamp (not ISO datetime): \" + b.timestamp);\nif (present(payment.failed_at) && !isIso(payment.failed_at)) errors.push(\"Invalid payment.failed_at (not ISO datetime): \" + payment.failed_at);\n\n// Numeric type checks\nconst numericTop = [\"recovery_attempt_count\"];\nfor (const f of numericTop) {\n  if (present(b[f]) && !isNum(b[f])) errors.push(\"Invalid numeric value: \" + f);\n}\nconst numericPayment = [\"amount\", \"time_since_failure_hours\"];\nfor (const f of numericPayment) {\n  if (present(payment[f]) && !isNum(payment[f])) errors.push(\"Invalid numeric value: payment.\" + f);\n}\nconst numericCustomer = [\"notification_count\", \"customer_age_days\", \"previous_successful_payments\", \"previous_failed_payments\", \"previous_recovery_attempts\", \"customer_lifetime_value\", \"average_previous_payment\", \"recent_payment_frequency\"];\nfor (const f of numericCustomer) {\n  if (present(customer[f]) && !isNum(customer[f])) errors.push(\"Invalid numeric value: customer.\" + f);\n}\n\n// Build clean API payload (payment_id at TOP LEVEL, numbers as numbers, lowercased enums)\nconst api_payload = {\n  event_id: b.event_id,\n  event_type: eventType,\n  timestamp: b.timestamp,\n  source: b.source,\n  recovery_attempt_count: num(b.recovery_attempt_count),\n  payment_id: paymentId,\n  payment: {\n    payment_id: paymentId,\n    amount: num(payment.amount),\n    currency: currency,\n    status: payment.status,\n    payment_method: method,\n    failed_at: payment.failed_at,\n    time_since_failure_hours: num(payment.time_since_failure_hours)\n  },\n  customer: {\n    customer_id: customer.customer_id,\n    notification_count: num(customer.notification_count),\n    customer_age_days: num(customer.customer_age_days),\n    previous_successful_payments: num(customer.previous_successful_payments),\n    previous_failed_payments: num(customer.previous_failed_payments),\n    previous_recovery_attempts: num(customer.previous_recovery_attempts),\n    customer_lifetime_value: num(customer.customer_lifetime_value),\n    average_previous_payment: num(customer.average_previous_payment),\n    recent_payment_frequency: num(customer.recent_payment_frequency)\n  }\n};\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    error_message: errors.length ? errors.join(\"; \") : null,\n    event_id: present(b.event_id) ? b.event_id : null,\n    payment_id: paymentId,\n    api_payload\n  }\n}];"
+      },
+      "id": "b0a9ec13-6d2f-4e3e-82be-0914a086e1f6",
+      "name": "Prepare Recovery Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3552,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "642f9ac7-c53a-4cfa-81b6-4c78209b66d3",
+      "name": "Validate Recovery Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3280,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://riders-geek-knit-martha.trycloudflare.com/api/workflows/recovery",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Reclaim-Workflow-Secret",
+              "value": "reclaim-demo-secret-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.api_payload) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "470bf888-6c05-49ea-be69-284ae38a1ce9",
+      "name": "Reclaim Recovery Evaluation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3024,
+        224
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction errorOut(message, paymentId, eventId, evaluation) {\n  return [{\n    json: {\n      ok: false,\n      action: \"ERROR\",\n      status: \"error\",\n      payment_id: paymentId != null ? paymentId : null,\n      event_id: eventId != null ? eventId : null,\n      message,\n      evaluation: evaluation != null ? evaluation : null\n    }\n  }];\n}\n\nif (!items.length) {\n  return errorOut(\"Reclaim returned no response.\", null, null, null);\n}\n\nlet data = items[0].json;\n\n// Handle n8n HTTP error item (onError: continueRegularOutput)\nif (data && data.error) {\n  const err = data.error;\n  const httpCode = err.httpCode || (err.context && err.context.httpCode) || null;\n  const msg = err.message || err.description || String(err);\n  const prefix = String(httpCode) === \"422\" ? \"Reclaim API validation failed: \" : \"Reclaim API request failed: \";\n  return errorOut(prefix + msg, null, null, { error: err });\n}\n\n// Handle string body\nif (typeof data === \"string\") {\n  try { data = JSON.parse(data); } catch (e) {\n    return errorOut(\"Reclaim returned invalid JSON.\", null, null, null);\n  }\n}\n\nif (!data || typeof data !== \"object\") {\n  return errorOut(\"Reclaim returned an empty response.\", null, null, null);\n}\n\n// Unwrap a body wrapper if present\nif (data.body && typeof data.body === \"object\" && !data.action && !data.decision) {\n  data = data.body;\n}\n\nconst paymentId = data.payment_id != null ? data.payment_id\n  : (data.payment && data.payment.payment_id != null ? data.payment.payment_id\n  : (data.decision && data.decision.payment_id != null ? data.decision.payment_id : null));\n\nconst eventId = data.event_id != null ? data.event_id\n  : (data.decision && data.decision.event_id != null ? data.decision.event_id : null);\n\nlet apiAction = data.action != null ? data.action\n  : (data.decision && data.decision.action != null ? data.decision.action : null);\nif (typeof apiAction === \"string\") apiAction = apiAction.trim().toUpperCase();\n\nconst eligible = data.eligible != null ? data.eligible\n  : (data.recovery_eligible != null ? data.recovery_eligible\n  : (data.decision && data.decision.recovery_eligible != null ? data.decision.recovery_eligible : null));\n\nconst requiresApproval = data.requires_approval != null ? data.requires_approval\n  : (data.decision && data.decision.requires_approval != null ? data.decision.requires_approval : false);\n\nconst duplicate = data.duplicate != null ? data.duplicate : false;\n\nconst validationStatus = data.validation_status != null ? data.validation_status\n  : (data.decision && data.decision.validation_status != null ? data.decision.validation_status : null);\n\nconst allowed = [\"RETRY\", \"PAYMENT_LINK\", \"REMINDER\", \"ESCALATE\", \"STOP\"];\n\n// Missing / unsupported action -> ERROR\nif (!apiAction) {\n  return errorOut(\"Recovery action missing from Reclaim response.\", paymentId, eventId, data);\n}\nif (!allowed.includes(apiAction)) {\n  return errorOut(\"Unsupported recovery action: \" + apiAction, paymentId, eventId, data);\n}\n\n// Deterministic safety overrides (precedence order)\nlet action = apiAction;\nlet message;\nif (duplicate === true) {\n  action = \"STOP\";\n  message = \"Duplicate event detected; recovery stopped.\";\n} else if (eligible === false) {\n  action = \"STOP\";\n  message = \"Recovery is not eligible; recovery stopped.\";\n} else if (apiAction === \"STOP\") {\n  action = \"STOP\";\n  message = \"Evaluation returned STOP; recovery stopped.\";\n} else if (requiresApproval === true) {\n  action = \"ESCALATE\";\n  message = \"Recovery requires manual approval; escalated for review.\";\n} else {\n  action = apiAction;\n  message = \"Validated recovery action: \" + action + \".\";\n}\n\nreturn [{\n  json: {\n    ok: true,\n    action,\n    status: \"success\",\n    payment_id: paymentId,\n    event_id: eventId,\n    risk_score: data.risk_score != null ? data.risk_score : (data.decision && data.decision.risk_score != null ? data.decision.risk_score : null),\n    eligible: eligible,\n    requires_approval: requiresApproval,\n    priority: data.priority != null ? data.priority : (data.decision && data.decision.priority != null ? data.decision.priority : null),\n    confidence: data.confidence != null ? data.confidence : (data.decision && data.decision.confidence != null ? data.decision.confidence : null),\n    validation_status: validationStatus,\n    duplicate: duplicate,\n    message,\n    evaluation: data\n  }\n}];"
+      },
+      "id": "b8abf4f7-0f6e-4605-a213-d7d586b1302f",
+      "name": "Normalize Evaluation Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2784,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "RETRY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "PAYMENT_LINK",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "REMINDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "ESCALATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "STOP",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "6f66504d-e7bb-4ada-9b94-ae06df520782",
+      "name": "Route Validated Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -2576,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "retry-action",
+              "name": "action",
+              "value": "RETRY",
+              "type": "string"
+            },
+            {
+              "id": "retry-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "retry-status",
+              "name": "status",
+              "value": "queued",
+              "type": "string"
+            },
+            {
+              "id": "retry-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "retry-message",
+              "name": "message",
+              "value": "A payment retry would be requested; no retry was performed.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "13cf6341-8fe2-4c18-aa36-f177f11960fe",
+      "name": "RETRY Dry Run",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "payment-action",
+              "name": "action",
+              "value": "PAYMENT_LINK",
+              "type": "string"
+            },
+            {
+              "id": "payment-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "payment-status",
+              "name": "status",
+              "value": "queued",
+              "type": "string"
+            },
+            {
+              "id": "payment-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "payment-message",
+              "name": "message",
+              "value": "A payment link would be requested; no link was created or sent.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "992feb1d-356d-4116-92f7-7689fb009ca5",
+      "name": "PAYMENT_LINK Dry Run",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "reminder-action",
+              "name": "action",
+              "value": "REMINDER",
+              "type": "string"
+            },
+            {
+              "id": "reminder-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "reminder-status",
+              "name": "status",
+              "value": "queued",
+              "type": "string"
+            },
+            {
+              "id": "reminder-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "reminder-message",
+              "name": "message",
+              "value": "A payment reminder would be sent; no reminder was sent.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00409cd7-7742-4362-9882-167a55aefccc",
+      "name": "REMINDER Dry Run",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "escalate-action",
+              "name": "action",
+              "value": "ESCALATE",
+              "type": "string"
+            },
+            {
+              "id": "escalate-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "escalate-status",
+              "name": "status",
+              "value": "queued",
+              "type": "string"
+            },
+            {
+              "id": "escalate-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "escalate-message",
+              "name": "message",
+              "value": "The payment would be escalated for manual review; no escalation was performed.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "feae40c0-8006-4cf2-b675-208b8c7caaf8",
+      "name": "ESCALATE Dry Run",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "stop-action",
+              "name": "action",
+              "value": "STOP",
+              "type": "string"
+            },
+            {
+              "id": "stop-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "stop-status",
+              "name": "status",
+              "value": "stopped",
+              "type": "string"
+            },
+            {
+              "id": "stop-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "stop-message",
+              "name": "message",
+              "value": "Recovery was stopped; no recovery action was performed.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6029f13f-d789-49f2-ab29-f10a0581c91f",
+      "name": "STOP Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error-action",
+              "name": "action",
+              "value": "ERROR",
+              "type": "string"
+            },
+            {
+              "id": "error-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "error-status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "error-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "error-message",
+              "name": "message",
+              "value": "={{ $json.message ?? \"The recovery event could not be processed.\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e72ad135-dcc3-4134-872d-14bf29eb7d0d",
+      "name": "Error Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "invalid-action",
+              "name": "action",
+              "value": "ERROR",
+              "type": "string"
+            },
+            {
+              "id": "invalid-mode",
+              "name": "mode",
+              "value": "dry_run",
+              "type": "string"
+            },
+            {
+              "id": "invalid-status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "invalid-payment",
+              "name": "payment_id",
+              "value": "={{ $json.payment_id ?? null }}",
+              "type": "string"
+            },
+            {
+              "id": "invalid-message",
+              "name": "message",
+              "value": "={{ $json.error_message ?? \"Invalid recovery event\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5eb3bd16-4766-4244-a8e8-05793ca3725d",
+      "name": "Invalid Event Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2832,
+        464
+      ]
+    }
+  ],
+  "connections": {
+    "Recovery Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Recovery Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Recovery Payload": {
+      "main": [
+        [
+          {
+            "node": "Validate Recovery Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Recovery Event": {
+      "main": [
+        [
+          {
+            "node": "Reclaim Recovery Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Event Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reclaim Recovery Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evaluation Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evaluation Response": {
+      "main": [
+        [
+          {
+            "node": "Route Validated Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Validated Decision": {
+      "main": [
+        [
+          {
+            "node": "RETRY Dry Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PAYMENT_LINK Dry Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "REMINDER Dry Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ESCALATE Dry Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "STOP Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "15ef0122ce8c5f963295f8990aa06ae20f07f4c83ccdce0a59743db4597c313b"
+  }
+}

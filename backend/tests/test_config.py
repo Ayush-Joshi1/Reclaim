@@ -25,7 +25,7 @@ def test_settings_default_razorpay_base_url(monkeypatch: pytest.MonkeyPatch) -> 
 
     settings = Settings.from_environment()
 
-    assert settings.razorpay_base_url == "https://api.razorpay.com"
+    assert settings.razorpay_base_url == "https://api.razorpay.com/v1"
 
 
 def test_settings_reject_missing_database_url(monkeypatch: pytest.MonkeyPatch) -> None:

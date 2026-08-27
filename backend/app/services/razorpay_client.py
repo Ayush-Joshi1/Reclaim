@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings, settings
-from app.schemas.razorpay import RazorpayCustomer, RazorpayPayment, RazorpayPaymentLink
+from app.schemas.razorpay import RazorpayPayment
 
 
 class RazorpayClientError(RuntimeError):
@@ -50,7 +50,7 @@ class RazorpayClient:
         self,
         key_id: str,
         key_secret: str,
-        base_url: str = "https://api.razorpay.com",
+        base_url: str = "https://api.razorpay.com/v1",
         timeout: float = 10.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
@@ -72,52 +72,7 @@ class RazorpayClient:
 
     def fetch_payment(self, payment_id: str) -> RazorpayPayment:
         """Fetch and normalize one payment."""
-        return self._parse_payment(self._request("GET", f"/v1/payments/{payment_id}"))
-
-    def fetch_payments(
-        self,
-        *,
-        count: int | None = None,
-        skip: int | None = None,
-        from_timestamp: int | None = None,
-        to_timestamp: int | None = None,
-    ) -> list[RazorpayPayment]:
-        """Fetch and normalize a payment listing."""
-        params = {
-            key: value
-            for key, value in {
-                "count": count,
-                "skip": skip,
-                "from": from_timestamp,
-                "to": to_timestamp,
-            }.items()
-            if value is not None
-        }
-        payload = self._request("GET", "/v1/payments", params=params)
-        items = payload.get("items")
-        if not isinstance(items, list):
-            raise RazorpayMalformedResponseError("Razorpay returned an invalid payment list.")
-        return [self._parse_payment(item) for item in items]
-
-    def create_payment_link(
-        self,
-        *,
-        amount: int,
-        currency: str = "INR",
-        description: str | None = None,
-        customer: RazorpayCustomer | dict[str, str] | None = None,
-    ) -> RazorpayPaymentLink:
-        """Create and normalize a payment link; this method does not execute a payment."""
-        payload: dict[str, Any] = {"amount": amount, "currency": currency}
-        if description is not None:
-            payload["description"] = description
-        if customer is not None:
-            payload["customer"] = (
-                customer.model_dump(exclude_none=True)
-                if isinstance(customer, RazorpayCustomer)
-                else customer
-            )
-        return self._parse_payment_link(self._request("POST", "/v1/payment_links", json=payload))
+        return self._parse_payment(self._request("GET", f"payments/{payment_id}"))
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:
@@ -172,12 +127,3 @@ class RazorpayClient:
         except (TypeError, ValueError) as error:
             raise RazorpayMalformedResponseError("Razorpay returned an invalid payment.") from error
 
-    @staticmethod
-    def _parse_payment_link(payload: Any) -> RazorpayPaymentLink:
-        if not isinstance(payload, dict):
-            raise RazorpayMalformedResponseError("Razorpay returned an invalid payment link.")
-        normalized = {key: payload.get(key) for key in RazorpayPaymentLink.model_fields if key in payload}
-        try:
-            return RazorpayPaymentLink.model_validate(normalized)
-        except (TypeError, ValueError) as error:
-            raise RazorpayMalformedResponseError("Razorpay returned an invalid payment link.") from error

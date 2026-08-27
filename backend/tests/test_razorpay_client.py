@@ -4,11 +4,12 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.main import app, get_razorpay_client
-from app.schemas import RazorpayCustomer
 from app.services.razorpay_client import (
     RazorpayAuthenticationError,
     RazorpayClient,
+    RazorpayClientError,
     RazorpayInvalidRequestError,
     RazorpayMalformedResponseError,
     RazorpayNetworkError,
@@ -48,45 +49,6 @@ def test_fetch_payment_normalizes_response_and_uses_basic_auth() -> None:
     assert payment.error is not None
     assert payment.error.code == "BAD_REQUEST_ERROR"
     assert payment.created_at is not None
-
-
-def test_fetch_payments_normalizes_listing() -> None:
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"items": [PAYMENT]}))
-
-    payments = _client(transport).fetch_payments(count=1, skip=2)
-
-    assert len(payments) == 1
-    assert payments[0].amount == 199900
-
-
-def test_create_payment_link_sends_expected_payload() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v1/payment_links"
-        assert request.content == (
-            b'{"amount":199900,"currency":"INR","description":"Recover failed payment",'
-            b'"customer":{"name":"Asha","email":"asha@example.com"}}'
-        )
-        return httpx.Response(
-            200,
-            json={
-                "id": "plink_test_123",
-                "amount": 199900,
-                "currency": "INR",
-                "status": "created",
-                "short_url": "https://rzp.io/i/test",
-                "description": "Recover failed payment",
-                "customer": {"name": "Asha", "email": "asha@example.com"},
-            },
-        )
-
-    link = _client(httpx.MockTransport(handler)).create_payment_link(
-        amount=199900,
-        description="Recover failed payment",
-        customer=RazorpayCustomer(name="Asha", email="asha@example.com"),
-    )
-
-    assert link.id == "plink_test_123"
-    assert link.short_url == "https://rzp.io/i/test"
 
 
 @pytest.mark.parametrize(
@@ -131,6 +93,13 @@ def test_malformed_response_is_rejected_without_secret() -> None:
     assert SECRET not in str(raised.value)
 
 
+def test_missing_configuration_is_rejected() -> None:
+    with pytest.raises(RazorpayAuthenticationError, match="not configured"):
+        RazorpayClient.from_settings(
+            Settings(database_url="postgresql://test", razorpay_key_id="", razorpay_key_secret="")
+        )
+
+
 def test_payment_endpoint_returns_normalized_data_without_credentials() -> None:
     app.dependency_overrides[get_razorpay_client] = lambda: _client(
         httpx.MockTransport(lambda request: httpx.Response(200, json=PAYMENT))
@@ -142,4 +111,30 @@ def test_payment_endpoint_returns_normalized_data_without_credentials() -> None:
 
     assert response.status_code == 200
     assert response.json()["id"] == "pay_test_123"
+    assert SECRET not in response.text
+
+
+@pytest.mark.parametrize(
+    ("exception", "expected_status"),
+    [
+        (RazorpayAuthenticationError("auth failed"), 502),
+        (RazorpayNotFoundError("not found"), 404),
+        (RazorpayUpstreamError("upstream failed"), 503),
+        (RazorpayNetworkError("request timed out"), 503),
+    ],
+)
+def test_payment_endpoint_translates_provider_failures(
+    exception: RazorpayClientError, expected_status: int
+) -> None:
+    class FailingClient:
+        def fetch_payment(self, payment_id: str) -> None:
+            raise exception
+
+    app.dependency_overrides[get_razorpay_client] = lambda: FailingClient()
+    try:
+        response = TestClient(app).get("/api/integrations/razorpay/payments/pay_test_123")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == expected_status
     assert SECRET not in response.text
