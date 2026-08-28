@@ -5,7 +5,11 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 import threading
-from typing import Protocol
+from typing import Callable, Protocol
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.schemas import (
     CustomerRiskContext,
@@ -15,11 +19,14 @@ from app.schemas import (
 )
 from app.schemas.razorpay import RazorpayPayment
 from app.schemas.workflow import RecoveryActionResult, RecoveryEvent, RecoveryWorkflowResponse
+from app.database import SessionLocal, create_tables
+from app.models import Customer, Payment, RecoveryAttempt
 from app.services.llm_client import FakeLLMClient, LLMClient, OpenAICompatibleLLMClient
 from app.services.recovery_context import build_recovery_context
 from app.services.recovery_decision import RecoveryDecisionService
 from app.services.revenue_risk import RevenueRiskEngine
 from app.services.razorpay_client import RazorpayClient
+from app.services.action_executor import ActionExecutor, DryRunActionExecutor, RazorpayActionExecutor
 
 
 class WorkflowPaymentClient(Protocol):
@@ -37,10 +44,14 @@ class RecoveryWorkflowService:
         payment_client: WorkflowPaymentClient | None = None,
         llm_client: LLMClient | None = None,
         policy: MerchantPolicy | None = None,
+        session_factory: Callable[[], Session] | None = None,
+        action_executor: ActionExecutor | None = None,
     ) -> None:
         self._payment_client = payment_client
         self._llm_client = llm_client
         self._policy = policy or MerchantPolicy()
+        self._session_factory = session_factory
+        self._action_executor = action_executor or DryRunActionExecutor()
         self._processed: dict[str, RecoveryWorkflowResponse] = {}
         self._lock = threading.Lock()
 
@@ -57,14 +68,165 @@ class RecoveryWorkflowService:
         risk_result = RevenueRiskEngine().evaluate(payment, customer, history, self._policy)
         context = build_recovery_context(payment, customer, history, risk_result, self._policy)
         decision = RecoveryDecisionService(self._decision_client()).decide(context)
-        result = self._action_result(decision.action, decision.payment_id)
-        response = RecoveryWorkflowResponse.from_decision(event_id, decision, result)
+        provisional_result = DryRunActionExecutor().execute(decision)
+        provisional_response = RecoveryWorkflowResponse.from_decision(
+            event_id, decision, provisional_result
+        )
+        if self._session_factory is not None:
+            persisted_response = self._persist_evaluation(
+                event_id, payment, provisional_response, event.recovery_attempt_count + 1
+            )
+            if persisted_response.duplicate:
+                return persisted_response
+        result = self._action_executor.execute(
+            decision,
+            amount=payment.amount,
+            currency=payment.currency,
+            event_id=event_id,
+            recipient=customer.customer_id,
+            recovery_attempt_count=event.recovery_attempt_count,
+            max_customer_notifications=self._policy.max_customer_notifications,
+        )
+        response = provisional_response.model_copy(update={"result": result})
+        if self._session_factory is not None:
+            self._update_execution_metadata(event_id, result)
 
         with self._lock:
             existing = self._processed.setdefault(event_id, response)
         if existing is not response:
             return existing.model_copy(update={"duplicate": True})
         return response
+
+    def _persist_evaluation(
+        self,
+        event_id: str,
+        payment: PaymentRiskInput,
+        response: RecoveryWorkflowResponse,
+        attempt_number: int,
+    ) -> RecoveryWorkflowResponse:
+        """Commit one audit record, relying on the database for cross-process uniqueness."""
+        create_tables()
+        session = self._session_factory()
+        try:
+            existing = session.scalar(
+                select(RecoveryAttempt).where(RecoveryAttempt.event_id == event_id)
+            )
+            if existing is not None:
+                return self._response_from_attempt(existing)
+
+            stored_payment = session.scalar(
+                select(Payment).where(Payment.razorpay_payment_id == payment.payment_id)
+            )
+            if stored_payment is None:
+                customer = Customer(
+                    name=f"Recovery customer {payment.payment_id}",
+                    email=f"{payment.payment_id}@reclaim.invalid",
+                )
+                stored_payment = Payment(
+                    razorpay_payment_id=payment.payment_id,
+                    customer=customer,
+                    amount=payment.amount,
+                    currency=payment.currency,
+                    status=payment.status,
+                    failure_reason=payment.failure_reason,
+                )
+                session.add(stored_payment)
+                session.flush()
+
+            attempt = RecoveryAttempt(
+                payment=stored_payment,
+                event_id=event_id,
+                attempt_number=attempt_number,
+                execution_mode=response.result.execution_mode,
+                provider_called=response.result.provider_called,
+                execution_succeeded=response.result.execution_succeeded,
+                notification_generated=response.result.notification_generated,
+                executed_at=response.result.executed_at,
+                action=response.action,
+                status=response.result.status,
+                amount=payment.amount,
+            )
+            session.add(attempt)
+            session.commit()
+            return response
+        except IntegrityError:
+            session.rollback()
+            existing = session.scalar(
+                select(RecoveryAttempt).where(RecoveryAttempt.event_id == event_id)
+            )
+            if existing is not None:
+                return self._response_from_attempt(existing)
+            raise
+        finally:
+            session.close()
+
+    def _update_execution_metadata(self, event_id: str, result: RecoveryActionResult) -> None:
+        """Record the final safe execution outcome after the audit insert."""
+        session = self._session_factory()
+        try:
+            attempt = session.scalar(
+                select(RecoveryAttempt).where(RecoveryAttempt.event_id == event_id)
+            )
+            if attempt is not None:
+                attempt.status = result.status
+                attempt.execution_mode = result.execution_mode
+                attempt.provider_called = result.provider_called
+                attempt.execution_succeeded = result.execution_succeeded
+                attempt.notification_generated = result.notification_generated
+                attempt.executed_at = result.executed_at
+                session.commit()
+        finally:
+            session.close()
+
+    @staticmethod
+    def _response_from_attempt(attempt: RecoveryAttempt) -> RecoveryWorkflowResponse:
+        """Return a stable duplicate response from a persisted audit record."""
+        result = RecoveryActionResult(
+            payment_id=attempt.payment.razorpay_payment_id or str(attempt.payment_id),
+            action=attempt.action,
+            status=attempt.status,
+            message={
+                "RETRY": "A payment retry would be requested; no payment operation was performed.",
+                "PAYMENT_LINK": "A payment link would be requested; no link was created or sent.",
+                "REMINDER": "A customer reminder would be requested; no notification was sent.",
+                "ESCALATE": "Merchant escalation would be requested for review.",
+                "STOP": "Recovery is stopped; no external action was requested.",
+            }[attempt.action],
+            execution_mode=attempt.execution_mode,
+            provider_called=attempt.provider_called,
+            execution_succeeded=attempt.execution_succeeded,
+            event_id=attempt.event_id,
+            executed_at=attempt.executed_at or attempt.created_at,
+        )
+        return RecoveryWorkflowResponse(
+            event_id=attempt.event_id or "",
+            duplicate=True,
+            payment_id=result.payment_id,
+            risk_score=0,
+            eligible=attempt.action != "STOP",
+            requires_approval=attempt.action == "ESCALATE",
+            action=attempt.action,
+            confidence=0.0,
+            validation_status="VALID",
+            priority="LOW",
+            decision={
+                "action": attempt.action,
+                "diagnosis": "Previously evaluated recovery event.",
+                "reasoning": "The persisted audit record was returned for this duplicate event.",
+                "confidence": 0.0,
+                "requires_approval": attempt.action == "ESCALATE",
+                "priority": "LOW",
+                "policy_constraints": [],
+                "expected_outcome": "No external action was performed.",
+                "payment_id": result.payment_id,
+                "risk_score": 0,
+                "recovery_eligible": attempt.action != "STOP",
+                "validation_status": "VALID",
+                "validation_notes": ["Duplicate event loaded from persistence."],
+                "decided_at": attempt.created_at,
+            },
+            result=result,
+        )
 
     def clear_idempotency(self) -> None:
         """Clear process-local event state for tests and local development."""
@@ -129,25 +291,12 @@ class RecoveryWorkflowService:
         )
 
     @staticmethod
-    def _action_result(action: str, payment_id: str) -> RecoveryActionResult:
-        messages = {
-            "RETRY": "A payment retry would be requested; no payment operation was performed.",
-            "PAYMENT_LINK": "A payment link would be requested; no link was created or sent.",
-            "REMINDER": "A customer reminder would be requested; no notification was sent.",
-            "ESCALATE": "Merchant escalation would be requested for review.",
-            "STOP": "Recovery is stopped; no external action was requested.",
-        }
-        return RecoveryActionResult(
-            payment_id=payment_id,
-            action=action,
-            status="terminal" if action == "STOP" else "queued",
-            message=messages[action],
-        )
-
-    @staticmethod
     def _derived_event_id(event: RecoveryEvent) -> str:
         digest = hashlib.sha256(event.model_dump_json().encode("utf-8")).hexdigest()
         return f"derived-{digest}"
 
 
-workflow_service = RecoveryWorkflowService()
+workflow_service = RecoveryWorkflowService(
+    session_factory=SessionLocal,
+    action_executor=RazorpayActionExecutor.from_settings(),
+)

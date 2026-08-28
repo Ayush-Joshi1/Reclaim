@@ -73,6 +73,12 @@ def test_valid_workflow_event_reaches_decision_layer() -> None:
         "mode": "dry_run",
         "status": "queued",
         "message": "A payment retry would be requested; no payment operation was performed.",
+        "execution_mode": "dry_run",
+        "provider_called": False,
+        "execution_succeeded": True,
+        "notification_generated": False,
+        "event_id": "evt_workflow_test",
+        "executed_at": body["result"]["executed_at"],
     }
 
 

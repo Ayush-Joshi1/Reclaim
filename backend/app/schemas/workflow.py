@@ -42,6 +42,12 @@ class RecoveryActionResult(BaseModel):
     mode: Literal["dry_run"] = "dry_run"
     status: Literal["queued", "terminal"]
     message: str
+    execution_mode: Literal["dry_run", "provider"] = "dry_run"
+    provider_called: bool = False
+    execution_succeeded: bool = True
+    notification_generated: bool = False
+    event_id: str | None = None
+    executed_at: datetime | None = None
 
 
 class RecoveryWorkflowResponse(BaseModel):

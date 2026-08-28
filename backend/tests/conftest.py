@@ -1,6 +1,9 @@
 """Test configuration for the Reclaim backend."""
 
 import os
+from pathlib import Path
 
-# Database tests are skipped if this local PostgreSQL instance is unavailable.
-os.environ.setdefault("DATABASE_URL", "postgresql://recoverai:localdev@localhost:5432/reclaim")
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parents[2] / ".env")
+os.environ.setdefault("DATABASE_URL", "postgresql://localhost:5432/reclaim")

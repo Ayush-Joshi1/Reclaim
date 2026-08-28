@@ -31,3 +31,16 @@ class RazorpayPayment(BaseModel):
     captured: bool | None = None
     error: RazorpayErrorInfo | None = None
     created_at: datetime | None = None
+
+
+class RazorpayPaymentLink(BaseModel):
+    """Safe subset returned after creating a Payment Link."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    amount: int = Field(ge=0)
+    currency: str
+    status: str
+    short_url: str
+    reference_id: str | None = None

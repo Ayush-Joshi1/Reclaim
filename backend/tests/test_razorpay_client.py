@@ -51,6 +51,64 @@ def test_fetch_payment_normalizes_response_and_uses_basic_auth() -> None:
     assert payment.created_at is not None
 
 
+def test_create_payment_link_uses_documented_endpoint_and_returns_safe_result() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/v1/payment_links/"
+        body = request.read().decode()
+        assert '"amount":125000' in body
+        assert '"reference_id":"pay_test_123"' in body
+        return httpx.Response(
+            200,
+            json={
+                "id": "plink_test_123",
+                "amount": 125000,
+                "currency": "INR",
+                "status": "created",
+                "short_url": "https://rzp.io/i/test123",
+                "reference_id": "pay_test_123",
+            },
+        )
+
+    link = _client(httpx.MockTransport(handler)).create_payment_link(
+        amount=125000,
+        currency="INR",
+        reference_id="pay_test_123",
+        description="Recovery payment",
+    )
+
+    assert link.id == "plink_test_123"
+    assert link.short_url == "https://rzp.io/i/test123"
+
+
+@pytest.mark.parametrize(
+    ("status_code", "exception_type"),
+    [
+        (401, RazorpayAuthenticationError),
+        (400, RazorpayInvalidRequestError),
+        (404, RazorpayNotFoundError),
+        (429, RazorpayRateLimitError),
+        (500, RazorpayUpstreamError),
+    ],
+)
+def test_payment_link_provider_errors_are_mapped(
+    status_code: int, exception_type: type[Exception]
+) -> None:
+    client = _client(
+        httpx.MockTransport(lambda request: httpx.Response(status_code, json={"error": "noisy"}))
+    )
+
+    with pytest.raises(exception_type):
+        client.create_payment_link(125000, "INR", "pay_test_123", "Recovery payment")
+
+
+def test_payment_link_malformed_response_is_rejected() -> None:
+    client = _client(httpx.MockTransport(lambda request: httpx.Response(200, json={"id": "plink_test"})))
+
+    with pytest.raises(RazorpayMalformedResponseError):
+        client.create_payment_link(125000, "INR", "pay_test_123", "Recovery payment")
+
+
 @pytest.mark.parametrize(
     ("status_code", "exception_type"),
     [

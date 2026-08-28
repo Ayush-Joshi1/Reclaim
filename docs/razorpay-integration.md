@@ -52,7 +52,22 @@ The FastAPI payment endpoint exposes provider failures as safe HTTP errors. Miss
 
 The test suite uses `httpx.MockTransport` for every Razorpay call. It verifies successful fetch, Basic Auth, endpoint construction, status-code mapping, timeout and network handling, malformed responses, missing configuration, endpoint normalization, and that the test secret cannot appear in errors or responses. The suite never contacts Razorpay.
 
-Task 5A intentionally does not implement payment retries, captures, refunds, payment links, webhooks, persistence, background workers, or frontend integration.
+## Recovery action mapping
+
+The Day 3 action executor maps only `PAYMENT_LINK` to Razorpay's documented
+`POST /v1/payment_links/` operation. It remains disabled unless both
+`RAZORPAY_ACTIONS_ENABLED=true` and `RAZORPAY_TEST_MODE=true` are explicitly
+configured. The executor passes amount, currency, a bounded reference ID, and
+notifications/reminders disabled; it returns only the Payment Link ID and URL
+through the safe action result message.
+
+`RETRY` has no direct Razorpay REST operation for a failed payment, so it stays
+dry-run. `REMINDER` is not mapped to a provider notification API, while
+`ESCALATE` and `STOP` remain provider-independent. Capture and refund are not
+part of this recovery flow and are not implemented.
+
+Automated tests use mocked HTTP transports and never contact Razorpay. Live
+Test Mode verification requires suitable test credentials and test data.
 
 Run the focused tests from `backend/`:
 

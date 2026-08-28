@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings, settings
-from app.schemas.razorpay import RazorpayPayment
+from app.schemas.razorpay import RazorpayPayment, RazorpayPaymentLink
 
 
 class RazorpayClientError(RuntimeError):
@@ -73,6 +73,32 @@ class RazorpayClient:
     def fetch_payment(self, payment_id: str) -> RazorpayPayment:
         """Fetch and normalize one payment."""
         return self._parse_payment(self._request("GET", f"payments/{payment_id}"))
+
+    def create_payment_link(
+        self, amount: int, currency: str, reference_id: str, description: str
+    ) -> RazorpayPaymentLink:
+        """Create one standard Payment Link using the documented Razorpay API."""
+        if amount < 100:
+            raise RazorpayInvalidRequestError("Payment Link amount must be at least 100 currency subunits.")
+        if len(reference_id) > 40:
+            raise RazorpayInvalidRequestError("Payment Link reference_id must be at most 40 characters.")
+        payload = self._request(
+            "POST",
+            "payment_links/",
+            json={
+                "amount": amount,
+                "currency": currency,
+                "reference_id": reference_id,
+                "description": description[:2048],
+                "customer": {"name": "Reclaim customer"},
+                "notify": {"sms": False, "email": False},
+                "reminder_enable": False,
+            },
+        )
+        try:
+            return RazorpayPaymentLink.model_validate(payload)
+        except (TypeError, ValueError) as error:
+            raise RazorpayMalformedResponseError("Razorpay returned an invalid Payment Link.") from error
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:
