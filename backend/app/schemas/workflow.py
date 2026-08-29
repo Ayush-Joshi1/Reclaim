@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from app.schemas.recovery_decision import ValidatedRecoveryDecision
 from app.schemas.revenue_risk import CustomerRiskContext, PaymentRiskInput
@@ -46,8 +46,18 @@ class RecoveryActionResult(BaseModel):
     provider_called: bool = False
     execution_succeeded: bool = True
     notification_generated: bool = False
+    provider_payment_id: str | None = None
+    provider_payment_link_id: str | None = None
+    provider_reference_id: str | None = None
     event_id: str | None = None
     executed_at: datetime | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        data = handler(self)
+        for key in ("provider_payment_id", "provider_payment_link_id", "provider_reference_id"):
+            data.pop(key, None)
+        return data
 
 
 class RecoveryWorkflowResponse(BaseModel):

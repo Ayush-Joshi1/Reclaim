@@ -1,0 +1,978 @@
+==================================================
+TEST 01 — RETRY
+Expected action: RETRY
+==================================================
+
+$body = @'
+{
+  "event_id": "retry_001",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_retry_001",
+  "payment": {
+    "payment_id": "pay_retry_001",
+    "amount": 199900,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "network_error",
+    "failed_at": "2026-08-29T11:00:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_retry_001",
+    "notification_count": 0,
+    "customer_age_days": 300,
+    "previous_successful_payments": 15,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 3000000,
+    "average_previous_payment": 199900,
+    "recent_payment_frequency": 8
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 02 — RETRY
+Expected action: RETRY
+==================================================
+
+$body = @'
+{
+  "event_id": "retry_002",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 1,
+  "payment_id": "pay_retry_002",
+  "payment": {
+    "payment_id": "pay_retry_002",
+    "amount": 175000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "upi",
+    "failure_reason": "timeout",
+    "failed_at": "2026-08-29T10:45:00+00:00",
+    "time_since_failure_hours": 3
+  },
+  "customer": {
+    "customer_id": "cust_retry_002",
+    "notification_count": 1,
+    "customer_age_days": 240,
+    "previous_successful_payments": 9,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 1,
+    "customer_lifetime_value": 2200000,
+    "average_previous_payment": 180000,
+    "recent_payment_frequency": 5
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 03 — RETRY
+Expected action: RETRY
+==================================================
+
+$body = @'
+{
+  "event_id": "retry_003",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_retry_003",
+  "payment": {
+    "payment_id": "pay_retry_003",
+    "amount": 220000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "netbanking",
+    "failure_reason": "bank_error",
+    "failed_at": "2026-08-29T11:30:00+00:00",
+    "time_since_failure_hours": 1
+  },
+  "customer": {
+    "customer_id": "cust_retry_003",
+    "notification_count": 0,
+    "customer_age_days": 180,
+    "previous_successful_payments": 4,
+    "previous_failed_payments": 2,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 1200000,
+    "average_previous_payment": 210000,
+    "recent_payment_frequency": 4
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 04 — RETRY
+Expected action: RETRY
+==================================================
+
+$body = @'
+{
+  "event_id": "retry_004",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_retry_004",
+  "payment": {
+    "payment_id": "pay_retry_004",
+    "amount": 320000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "wallet",
+    "failure_reason": "network_error",
+    "failed_at": "2026-08-29T10:00:00+00:00",
+    "time_since_failure_hours": 5
+  },
+  "customer": {
+    "customer_id": "cust_retry_004",
+    "notification_count": 2,
+    "customer_age_days": 540,
+    "previous_successful_payments": 6,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 2800000,
+    "average_previous_payment": 290000,
+    "recent_payment_frequency": 6
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 05 — RETRY
+Expected action: RETRY
+==================================================
+
+$body = @'
+{
+  "event_id": "retry_005",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 1,
+  "payment_id": "pay_retry_005",
+  "payment": {
+    "payment_id": "pay_retry_005",
+    "amount": 140000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "timeout",
+    "failed_at": "2026-08-29T11:15:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_retry_005",
+    "notification_count": 1,
+    "customer_age_days": 120,
+    "previous_successful_payments": 2,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 1,
+    "customer_lifetime_value": 600000,
+    "average_previous_payment": 160000,
+    "recent_payment_frequency": 3
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 06 — PAYMENT_LINK
+Expected action: PAYMENT_LINK
+==================================================
+
+$body = @'
+{
+  "event_id": "payment_link_001",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_payment_link_001",
+  "payment": {
+    "payment_id": "pay_payment_link_001",
+    "amount": 150000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "card_declined",
+    "failed_at": "2026-08-29T11:00:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_payment_link_001",
+    "notification_count": 0,
+    "customer_age_days": 420,
+    "previous_successful_payments": 12,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 4000000,
+    "average_previous_payment": 240000,
+    "recent_payment_frequency": 7
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 07 — PAYMENT_LINK
+Expected action: PAYMENT_LINK
+==================================================
+
+$body = @'
+{
+  "event_id": "payment_link_002",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_payment_link_002",
+  "payment": {
+    "payment_id": "pay_payment_link_002",
+    "amount": 130000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "upi",
+    "failure_reason": "insufficient_funds",
+    "failed_at": "2026-08-29T10:30:00+00:00",
+    "time_since_failure_hours": 4
+  },
+  "customer": {
+    "customer_id": "cust_payment_link_002",
+    "notification_count": 1,
+    "customer_age_days": 360,
+    "previous_successful_payments": 8,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 3100000,
+    "average_previous_payment": 170000,
+    "recent_payment_frequency": 6
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 08 — PAYMENT_LINK
+Expected action: PAYMENT_LINK
+==================================================
+
+$body = @'
+{
+  "event_id": "payment_link_003",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_payment_link_003",
+  "payment": {
+    "payment_id": "pay_payment_link_003",
+    "amount": 240000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "netbanking",
+    "failure_reason": "fraud_check",
+    "failed_at": "2026-08-29T11:20:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_payment_link_003",
+    "notification_count": 0,
+    "customer_age_days": 900,
+    "previous_successful_payments": 15,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 5300000,
+    "average_previous_payment": 250000,
+    "recent_payment_frequency": 8
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 09 — PAYMENT_LINK
+Expected action: PAYMENT_LINK
+==================================================
+
+$body = @'
+{
+  "event_id": "payment_link_004",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 1,
+  "payment_id": "pay_payment_link_004",
+  "payment": {
+    "payment_id": "pay_payment_link_004",
+    "amount": 210000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "wallet",
+    "failure_reason": "payment_rejected",
+    "failed_at": "2026-08-29T11:45:00+00:00",
+    "time_since_failure_hours": 1
+  },
+  "customer": {
+    "customer_id": "cust_payment_link_004",
+    "notification_count": 1,
+    "customer_age_days": 330,
+    "previous_successful_payments": 11,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 1,
+    "customer_lifetime_value": 2600000,
+    "average_previous_payment": 235000,
+    "recent_payment_frequency": 6
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 10 — PAYMENT_LINK
+Expected action: PAYMENT_LINK
+==================================================
+
+$body = @'
+{
+  "event_id": "payment_link_005",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_payment_link_005",
+  "payment": {
+    "payment_id": "pay_payment_link_005",
+    "amount": 310000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "card_declined",
+    "failed_at": "2026-08-29T10:00:00+00:00",
+    "time_since_failure_hours": 6
+  },
+  "customer": {
+    "customer_id": "cust_payment_link_005",
+    "notification_count": 0,
+    "customer_age_days": 600,
+    "previous_successful_payments": 14,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 9000000,
+    "average_previous_payment": 300000,
+    "recent_payment_frequency": 9
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 11 — REMINDER
+Expected action: REMINDER
+==================================================
+
+$body = @'
+{
+  "event_id": "reminder_001",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_reminder_001",
+  "payment": {
+    "payment_id": "pay_reminder_001",
+    "amount": 180000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "unknown_error",
+    "failed_at": "2026-08-27T12:00:00+00:00",
+    "time_since_failure_hours": 48
+  },
+  "customer": {
+    "customer_id": "cust_reminder_001",
+    "notification_count": 2,
+    "customer_age_days": 210,
+    "previous_successful_payments": 0,
+    "previous_failed_payments": 3,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 650000,
+    "average_previous_payment": 140000,
+    "recent_payment_frequency": 1
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 12 — REMINDER
+Expected action: REMINDER
+==================================================
+
+$body = @'
+{
+  "event_id": "reminder_002",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_reminder_002",
+  "payment": {
+    "payment_id": "pay_reminder_002",
+    "amount": 160000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "upi",
+    "failure_reason": "authentication_failed",
+    "failed_at": "2026-08-29T08:00:00+00:00",
+    "time_since_failure_hours": 20
+  },
+  "customer": {
+    "customer_id": "cust_reminder_002",
+    "notification_count": 0,
+    "customer_age_days": 150,
+    "previous_successful_payments": 2,
+    "previous_failed_payments": 3,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 800000,
+    "average_previous_payment": 150000,
+    "recent_payment_frequency": 2
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 13 — REMINDER
+Expected action: REMINDER
+==================================================
+
+$body = @'
+{
+  "event_id": "reminder_003",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 1,
+  "payment_id": "pay_reminder_003",
+  "payment": {
+    "payment_id": "pay_reminder_003",
+    "amount": 92000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "netbanking",
+    "failure_reason": "invalid_cvv",
+    "failed_at": "2026-08-29T09:00:00+00:00",
+    "time_since_failure_hours": 18
+  },
+  "customer": {
+    "customer_id": "cust_reminder_003",
+    "notification_count": 1,
+    "customer_age_days": 270,
+    "previous_successful_payments": 1,
+    "previous_failed_payments": 2,
+    "previous_recovery_attempts": 1,
+    "customer_lifetime_value": 450000,
+    "average_previous_payment": 95000,
+    "recent_payment_frequency": 1
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 14 — REMINDER
+Expected action: REMINDER
+==================================================
+
+$body = @'
+{
+  "event_id": "reminder_004",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_reminder_004",
+  "payment": {
+    "payment_id": "pay_reminder_004",
+    "amount": 120000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "wallet",
+    "failure_reason": "insufficient_funds",
+    "failed_at": "2026-08-29T07:00:00+00:00",
+    "time_since_failure_hours": 29
+  },
+  "customer": {
+    "customer_id": "cust_reminder_004",
+    "notification_count": 2,
+    "customer_age_days": 110,
+    "previous_successful_payments": 1,
+    "previous_failed_payments": 4,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 520000,
+    "average_previous_payment": 110000,
+    "recent_payment_frequency": 2
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 15 — REMINDER
+Expected action: REMINDER
+==================================================
+
+$body = @'
+{
+  "event_id": "reminder_005",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_reminder_005",
+  "payment": {
+    "payment_id": "pay_reminder_005",
+    "amount": 140000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "payment_rejected",
+    "failed_at": "2026-08-29T08:30:00+00:00",
+    "time_since_failure_hours": 27
+  },
+  "customer": {
+    "customer_id": "cust_reminder_005",
+    "notification_count": 0,
+    "customer_age_days": 95,
+    "previous_successful_payments": 0,
+    "previous_failed_payments": 5,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 400000,
+    "average_previous_payment": 130000,
+    "recent_payment_frequency": 0
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 16 — ESCALATE
+Expected action: ESCALATE
+==================================================
+
+$body = @'
+{
+  "event_id": "escalate_001",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_escalate_001",
+  "payment": {
+    "payment_id": "pay_escalate_001",
+    "amount": 600000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "card_declined",
+    "failed_at": "2026-08-29T11:00:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_escalate_001",
+    "notification_count": 1,
+    "customer_age_days": 500,
+    "previous_successful_payments": 12,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 9000000,
+    "average_previous_payment": 450000,
+    "recent_payment_frequency": 7
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 17 — ESCALATE
+Expected action: ESCALATE
+==================================================
+
+$body = @'
+{
+  "event_id": "escalate_002",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_escalate_002",
+  "payment": {
+    "payment_id": "pay_escalate_002",
+    "amount": 750000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "upi",
+    "failure_reason": "insufficient_funds",
+    "failed_at": "2026-08-29T11:10:00+00:00",
+    "time_since_failure_hours": 1
+  },
+  "customer": {
+    "customer_id": "cust_escalate_002",
+    "notification_count": 2,
+    "customer_age_days": 410,
+    "previous_successful_payments": 10,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 12000000,
+    "average_previous_payment": 500000,
+    "recent_payment_frequency": 8
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 18 — ESCALATE
+Expected action: ESCALATE
+==================================================
+
+$body = @'
+{
+  "event_id": "escalate_003",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_escalate_003",
+  "payment": {
+    "payment_id": "pay_escalate_003",
+    "amount": 820000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "netbanking",
+    "failure_reason": "fraud_check",
+    "failed_at": "2026-08-29T10:45:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_escalate_003",
+    "notification_count": 1,
+    "customer_age_days": 630,
+    "previous_successful_payments": 9,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 9800000,
+    "average_previous_payment": 420000,
+    "recent_payment_frequency": 5
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 19 — ESCALATE
+Expected action: ESCALATE
+==================================================
+
+$body = @'
+{
+  "event_id": "escalate_004",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_escalate_004",
+  "payment": {
+    "payment_id": "pay_escalate_004",
+    "amount": 900000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "wallet",
+    "failure_reason": "payment_rejected",
+    "failed_at": "2026-08-29T11:15:00+00:00",
+    "time_since_failure_hours": 3
+  },
+  "customer": {
+    "customer_id": "cust_escalate_004",
+    "notification_count": 0,
+    "customer_age_days": 470,
+    "previous_successful_payments": 11,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 11000000,
+    "average_previous_payment": 480000,
+    "recent_payment_frequency": 6
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 20 — ESCALATE
+Expected action: ESCALATE
+==================================================
+
+$body = @'
+{
+  "event_id": "escalate_005",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 1,
+  "payment_id": "pay_escalate_005",
+  "payment": {
+    "payment_id": "pay_escalate_005",
+    "amount": 1200000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "card_declined",
+    "failed_at": "2026-08-29T09:30:00+00:00",
+    "time_since_failure_hours": 6
+  },
+  "customer": {
+    "customer_id": "cust_escalate_005",
+    "notification_count": 1,
+    "customer_age_days": 280,
+    "previous_successful_payments": 7,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 1,
+    "customer_lifetime_value": 13000000,
+    "average_previous_payment": 640000,
+    "recent_payment_frequency": 4
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 21 — STOP
+Expected action: STOP
+==================================================
+
+$body = @'
+{
+  "event_id": "stop_001",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_stop_001",
+  "payment": {
+    "payment_id": "pay_stop_001",
+    "amount": 90000,
+    "currency": "INR",
+    "status": "successful",
+    "payment_method": "card",
+    "failure_reason": "card_declined",
+    "failed_at": "2026-08-29T11:00:00+00:00",
+    "time_since_failure_hours": 2
+  },
+  "customer": {
+    "customer_id": "cust_stop_001",
+    "notification_count": 0,
+    "customer_age_days": 200,
+    "previous_successful_payments": 5,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 500000,
+    "average_previous_payment": 95000,
+    "recent_payment_frequency": 3
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 22 — STOP
+Expected action: STOP
+==================================================
+
+$body = @'
+{
+  "event_id": "stop_002",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 2,
+  "payment_id": "pay_stop_002",
+  "payment": {
+    "payment_id": "pay_stop_002",
+    "amount": 150000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "upi",
+    "failure_reason": "timeout",
+    "failed_at": "2026-08-29T11:00:00+00:00",
+    "time_since_failure_hours": 4
+  },
+  "customer": {
+    "customer_id": "cust_stop_002",
+    "notification_count": 0,
+    "customer_age_days": 360,
+    "previous_successful_payments": 7,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 2,
+    "customer_lifetime_value": 1200000,
+    "average_previous_payment": 150000,
+    "recent_payment_frequency": 5
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 23 — STOP
+Expected action: STOP
+==================================================
+
+$body = @'
+{
+  "event_id": "stop_003",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_stop_003",
+  "payment": {
+    "payment_id": "pay_stop_003",
+    "amount": 210000,
+    "currency": "INR",
+    "status": "failed",
+    "payment_method": "card",
+    "failure_reason": "network_error",
+    "failed_at": "2026-08-25T12:00:00+00:00",
+    "time_since_failure_hours": 72
+  },
+  "customer": {
+    "customer_id": "cust_stop_003",
+    "notification_count": 1,
+    "customer_age_days": 515,
+    "previous_successful_payments": 9,
+    "previous_failed_payments": 0,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 2800000,
+    "average_previous_payment": 230000,
+    "recent_payment_frequency": 4
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 24 — STOP
+Expected action: STOP
+==================================================
+
+$body = @'
+{
+  "event_id": "stop_004",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_stop_004",
+  "payment": {
+    "payment_id": "pay_stop_004",
+    "amount": 175000,
+    "currency": "INR",
+    "status": "permanently_closed",
+    "payment_method": "netbanking",
+    "failure_reason": "bank_error",
+    "failed_at": "2026-08-29T10:00:00+00:00",
+    "time_since_failure_hours": 4
+  },
+  "customer": {
+    "customer_id": "cust_stop_004",
+    "notification_count": 1,
+    "customer_age_days": 300,
+    "previous_successful_payments": 6,
+    "previous_failed_payments": 1,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 1800000,
+    "average_previous_payment": 190000,
+    "recent_payment_frequency": 3
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+==================================================
+TEST 25 — STOP
+Expected action: STOP
+==================================================
+
+$body = @'
+{
+  "event_id": "stop_005",
+  "event_type": "payment_failed",
+  "timestamp": "2026-08-29T12:00:00+00:00",
+  "source": "n8n",
+  "recovery_attempt_count": 0,
+  "payment_id": "pay_stop_005",
+  "payment": {
+    "payment_id": "pay_stop_005",
+    "amount": 205000,
+    "currency": "INR",
+    "status": "stopped",
+    "payment_method": "wallet",
+    "failure_reason": "timeout",
+    "failed_at": "2026-08-29T07:00:00+00:00",
+    "time_since_failure_hours": 29
+  },
+  "customer": {
+    "customer_id": "cust_stop_005",
+    "notification_count": 2,
+    "customer_age_days": 700,
+    "previous_successful_payments": 13,
+    "previous_failed_payments": 2,
+    "previous_recovery_attempts": 0,
+    "customer_lifetime_value": 4500000,
+    "average_previous_payment": 260000,
+    "recent_payment_frequency": 7
+  }
+}
+'@ | ConvertFrom-Json
+Invoke-RestMethod -Uri "https://ayushjoshi1.app.n8n.cloud/webhook-test/reclaim-recovery" -Method POST -Headers @{ "Content-Type" = "application/json"; "X-Reclaim-Workflow-Secret" = "workflow-comprehensive-test-secret" } -Body ($body | ConvertTo-Json -Depth 10)
+
+EXPECTED RESULTS
+TEST 01 → RETRY
+TEST 02 → RETRY
+TEST 03 → RETRY
+TEST 04 → RETRY
+TEST 05 → RETRY
+TEST 06 → PAYMENT_LINK
+TEST 07 → PAYMENT_LINK
+TEST 08 → PAYMENT_LINK
+TEST 09 → PAYMENT_LINK
+TEST 10 → PAYMENT_LINK
+TEST 11 → REMINDER
+TEST 12 → REMINDER
+TEST 13 → REMINDER
+TEST 14 → REMINDER
+TEST 15 → REMINDER
+TEST 16 → ESCALATE
+TEST 17 → ESCALATE
+TEST 18 → ESCALATE
+TEST 19 → ESCALATE
+TEST 20 → ESCALATE
+TEST 21 → STOP
+TEST 22 → STOP
+TEST 23 → STOP
+TEST 24 → STOP
+TEST 25 → STOP
+
+Check the returned backend field named action. The expected result must match the test case's expected action for that test.

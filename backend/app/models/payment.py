@@ -22,6 +22,8 @@ class Payment(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     status: Mapped[str] = mapped_column(String(50), nullable=False)
+    recovery_state: Mapped[str | None] = mapped_column(String(50), index=True, default="ignored")
+    state_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_reason: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

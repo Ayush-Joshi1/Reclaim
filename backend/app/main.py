@@ -8,8 +8,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.integrations import router as integrations_router
 from app.api.workflows import router as workflow_router
 from app.api.recovery import router as recovery_router
+from app.api.reconciliation import router as reconciliation_router
+from app.api.follow_up import router as follow_up_router
 from app.config import settings
 from app.database import get_db
 from app.schemas import DatabaseHealthResponse, ServiceHealthResponse
@@ -39,6 +42,9 @@ app.add_middleware(
 )
 app.include_router(workflow_router)
 app.include_router(recovery_router)
+app.include_router(reconciliation_router)
+app.include_router(follow_up_router)
+app.include_router(integrations_router)
 
 
 @app.get("/health", response_model=ServiceHealthResponse)

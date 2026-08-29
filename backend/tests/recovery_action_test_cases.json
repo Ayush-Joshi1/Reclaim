@@ -1,0 +1,860 @@
+{
+  "description": "Comprehensive recovery action test matrix",
+  "source_of_truth": [
+    "backend/app/services/llm_client.py",
+    "backend/app/services/revenue_risk.py",
+    "backend/app/api/workflows.py"
+  ],
+  "test_cases": [
+    {
+      "id": "retry_001",
+      "expected_action": "RETRY",
+      "reason": "payment.failure_reason == 'network_error' and the payment remains eligible; the deterministic rule checks transient failures before the risk-score branch.",
+      "input": {
+        "event_id": "retry_001",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_retry_001",
+        "payment": {
+          "payment_id": "pay_retry_001",
+          "amount": 199900,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "network_error",
+          "failed_at": "2026-08-29T11:00:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_retry_001",
+          "notification_count": 0,
+          "customer_age_days": 300,
+          "previous_successful_payments": 15,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 3000000,
+          "average_previous_payment": 199900,
+          "recent_payment_frequency": 8
+        }
+      }
+    },
+    {
+      "id": "retry_002",
+      "expected_action": "RETRY",
+      "reason": "payment.failure_reason == 'timeout' is a supported transient failure; this keeps the payment eligible and triggers the RETRY rule ahead of PAYMENT_LINK.",
+      "input": {
+        "event_id": "retry_002",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 1,
+        "payment_id": "pay_retry_002",
+        "payment": {
+          "payment_id": "pay_retry_002",
+          "amount": 175000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "upi",
+          "failure_reason": "timeout",
+          "failed_at": "2026-08-29T10:45:00+00:00",
+          "time_since_failure_hours": 3
+        },
+        "customer": {
+          "customer_id": "cust_retry_002",
+          "notification_count": 1,
+          "customer_age_days": 240,
+          "previous_successful_payments": 9,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 1,
+          "customer_lifetime_value": 2200000,
+          "average_previous_payment": 180000,
+          "recent_payment_frequency": 5
+        }
+      }
+    },
+    {
+      "id": "retry_003",
+      "expected_action": "RETRY",
+      "reason": "payment.failure_reason == 'bank_error' matches the supported transient retry set for the backend; the payment is still within the recovery window and below approval limits.",
+      "input": {
+        "event_id": "retry_003",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_retry_003",
+        "payment": {
+          "payment_id": "pay_retry_003",
+          "amount": 220000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "netbanking",
+          "failure_reason": "bank_error",
+          "failed_at": "2026-08-29T11:30:00+00:00",
+          "time_since_failure_hours": 1
+        },
+        "customer": {
+          "customer_id": "cust_retry_003",
+          "notification_count": 0,
+          "customer_age_days": 180,
+          "previous_successful_payments": 4,
+          "previous_failed_payments": 2,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 1200000,
+          "average_previous_payment": 210000,
+          "recent_payment_frequency": 4
+        }
+      }
+    },
+    {
+      "id": "retry_004",
+      "expected_action": "RETRY",
+      "reason": "A supported transient failure reason (network_error) wins before the risk-based PAYMENT_LINK branch; the customer remains eligible and under approval thresholds.",
+      "input": {
+        "event_id": "retry_004",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_retry_004",
+        "payment": {
+          "payment_id": "pay_retry_004",
+          "amount": 320000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "wallet",
+          "failure_reason": "network_error",
+          "failed_at": "2026-08-29T10:00:00+00:00",
+          "time_since_failure_hours": 5
+        },
+        "customer": {
+          "customer_id": "cust_retry_004",
+          "notification_count": 2,
+          "customer_age_days": 540,
+          "previous_successful_payments": 6,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 2800000,
+          "average_previous_payment": 290000,
+          "recent_payment_frequency": 6
+        }
+      }
+    },
+    {
+      "id": "retry_005",
+      "expected_action": "RETRY",
+      "reason": "The backend explicitly recognizes timeout as a retry trigger, and this payment is below the approval threshold with a valid, eligible recovery window.",
+      "input": {
+        "event_id": "retry_005",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 1,
+        "payment_id": "pay_retry_005",
+        "payment": {
+          "payment_id": "pay_retry_005",
+          "amount": 140000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "timeout",
+          "failed_at": "2026-08-29T11:15:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_retry_005",
+          "notification_count": 1,
+          "customer_age_days": 120,
+          "previous_successful_payments": 2,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 1,
+          "customer_lifetime_value": 600000,
+          "average_previous_payment": 160000,
+          "recent_payment_frequency": 3
+        }
+      }
+    },
+    {
+      "id": "payment_link_001",
+      "expected_action": "PAYMENT_LINK",
+      "reason": "The payment is eligible, not subject to approval, and the risk score exceeds 70 because the customer has strong repayment history and a recent failure; a non-retry failure_reason prevents the RETRY branch.",
+      "input": {
+        "event_id": "payment_link_001",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_payment_link_001",
+        "payment": {
+          "payment_id": "pay_payment_link_001",
+          "amount": 150000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "card_declined",
+          "failed_at": "2026-08-29T11:00:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_payment_link_001",
+          "notification_count": 0,
+          "customer_age_days": 420,
+          "previous_successful_payments": 12,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 4000000,
+          "average_previous_payment": 240000,
+          "recent_payment_frequency": 7
+        }
+      }
+    },
+    {
+      "id": "payment_link_002",
+      "expected_action": "PAYMENT_LINK",
+      "reason": "The backend calculates a high recovery score from strong customer history and low-risk timing; payment.failure_reason is not a transient retry trigger so the score-based PAYMENT_LINK branch applies.",
+      "input": {
+        "event_id": "payment_link_002",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_payment_link_002",
+        "payment": {
+          "payment_id": "pay_payment_link_002",
+          "amount": 130000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "upi",
+          "failure_reason": "insufficient_funds",
+          "failed_at": "2026-08-29T10:30:00+00:00",
+          "time_since_failure_hours": 4
+        },
+        "customer": {
+          "customer_id": "cust_payment_link_002",
+          "notification_count": 1,
+          "customer_age_days": 360,
+          "previous_successful_payments": 8,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 3100000,
+          "average_previous_payment": 170000,
+          "recent_payment_frequency": 6
+        }
+      }
+    },
+    {
+      "id": "payment_link_003",
+      "expected_action": "PAYMENT_LINK",
+      "reason": "This is a high-likelihood customer with no stop conditions and a non-transient decline reason; once the score is above 70 and approval is false, the backend chooses PAYMENT_LINK.",
+      "input": {
+        "event_id": "payment_link_003",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_payment_link_003",
+        "payment": {
+          "payment_id": "pay_payment_link_003",
+          "amount": 240000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "netbanking",
+          "failure_reason": "fraud_check",
+          "failed_at": "2026-08-29T11:20:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_payment_link_003",
+          "notification_count": 0,
+          "customer_age_days": 900,
+          "previous_successful_payments": 15,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 5300000,
+          "average_previous_payment": 250000,
+          "recent_payment_frequency": 8
+        }
+      }
+    },
+    {
+      "id": "payment_link_004",
+      "expected_action": "PAYMENT_LINK",
+      "reason": "The customer history produces a strong score; the failure reason is not transient, so the RETRY branch is skipped and risk_score >= 70 makes PAYMENT_LINK the deterministic outcome.",
+      "input": {
+        "event_id": "payment_link_004",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 1,
+        "payment_id": "pay_payment_link_004",
+        "payment": {
+          "payment_id": "pay_payment_link_004",
+          "amount": 210000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "wallet",
+          "failure_reason": "payment_rejected",
+          "failed_at": "2026-08-29T11:45:00+00:00",
+          "time_since_failure_hours": 1
+        },
+        "customer": {
+          "customer_id": "cust_payment_link_004",
+          "notification_count": 1,
+          "customer_age_days": 330,
+          "previous_successful_payments": 11,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 1,
+          "customer_lifetime_value": 2600000,
+          "average_previous_payment": 235000,
+          "recent_payment_frequency": 6
+        }
+      }
+    },
+    {
+      "id": "payment_link_005",
+      "expected_action": "PAYMENT_LINK",
+      "reason": "The backend score stays above the 70 threshold because this customer has strong historical success and recent activity; the fail reason is not in the transient retry set.",
+      "input": {
+        "event_id": "payment_link_005",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_payment_link_005",
+        "payment": {
+          "payment_id": "pay_payment_link_005",
+          "amount": 310000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "card_declined",
+          "failed_at": "2026-08-29T10:00:00+00:00",
+          "time_since_failure_hours": 6
+        },
+        "customer": {
+          "customer_id": "cust_payment_link_005",
+          "notification_count": 0,
+          "customer_age_days": 600,
+          "previous_successful_payments": 14,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 9000000,
+          "average_previous_payment": 300000,
+          "recent_payment_frequency": 9
+        }
+      }
+    },
+    {
+      "id": "reminder_001",
+      "expected_action": "REMINDER",
+      "reason": "The payment is eligible, not under approval, and the score is below 70 because the customer has repeated failures and the failure is old; that falls through to the reminder fallback.",
+      "input": {
+        "event_id": "reminder_001",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_reminder_001",
+        "payment": {
+          "payment_id": "pay_reminder_001",
+          "amount": 180000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "unknown_error",
+          "failed_at": "2026-08-27T12:00:00+00:00",
+          "time_since_failure_hours": 48
+        },
+        "customer": {
+          "customer_id": "cust_reminder_001",
+          "notification_count": 2,
+          "customer_age_days": 210,
+          "previous_successful_payments": 0,
+          "previous_failed_payments": 3,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 650000,
+          "average_previous_payment": 140000,
+          "recent_payment_frequency": 1
+        }
+      }
+    },
+    {
+      "id": "reminder_002",
+      "expected_action": "REMINDER",
+      "reason": "This payment is below the automatic-action threshold and the score stays below 70 because of prior customer failures and modest activity; with no transient retry reason, the backend falls back to REMINDER.",
+      "input": {
+        "event_id": "reminder_002",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_reminder_002",
+        "payment": {
+          "payment_id": "pay_reminder_002",
+          "amount": 160000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "upi",
+          "failure_reason": "authentication_failed",
+          "failed_at": "2026-08-29T08:00:00+00:00",
+          "time_since_failure_hours": 20
+        },
+        "customer": {
+          "customer_id": "cust_reminder_002",
+          "notification_count": 0,
+          "customer_age_days": 150,
+          "previous_successful_payments": 2,
+          "previous_failed_payments": 3,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 800000,
+          "average_previous_payment": 150000,
+          "recent_payment_frequency": 2
+        }
+      }
+    },
+    {
+      "id": "reminder_003",
+      "expected_action": "REMINDER",
+      "reason": "The failure reason is not one of the supported retry triggers and the risk score does not reach the payment-link threshold; this keeps the event eligible but non-urgent enough for a reminder.",
+      "input": {
+        "event_id": "reminder_003",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 1,
+        "payment_id": "pay_reminder_003",
+        "payment": {
+          "payment_id": "pay_reminder_003",
+          "amount": 92000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "netbanking",
+          "failure_reason": "invalid_cvv",
+          "failed_at": "2026-08-29T09:00:00+00:00",
+          "time_since_failure_hours": 18
+        },
+        "customer": {
+          "customer_id": "cust_reminder_003",
+          "notification_count": 1,
+          "customer_age_days": 270,
+          "previous_successful_payments": 1,
+          "previous_failed_payments": 2,
+          "previous_recovery_attempts": 1,
+          "customer_lifetime_value": 450000,
+          "average_previous_payment": 95000,
+          "recent_payment_frequency": 1
+        }
+      }
+    },
+    {
+      "id": "reminder_004",
+      "expected_action": "REMINDER",
+      "reason": "This is still eligible but below the 70-point threshold; with a moderate-risk profile and a non-transient failure reason, the deterministic backend falls through to REMINDER.",
+      "input": {
+        "event_id": "reminder_004",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_reminder_004",
+        "payment": {
+          "payment_id": "pay_reminder_004",
+          "amount": 120000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "wallet",
+          "failure_reason": "insufficient_funds",
+          "failed_at": "2026-08-29T07:00:00+00:00",
+          "time_since_failure_hours": 29
+        },
+        "customer": {
+          "customer_id": "cust_reminder_004",
+          "notification_count": 2,
+          "customer_age_days": 110,
+          "previous_successful_payments": 1,
+          "previous_failed_payments": 4,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 520000,
+          "average_previous_payment": 110000,
+          "recent_payment_frequency": 2
+        }
+      }
+    },
+    {
+      "id": "reminder_005",
+      "expected_action": "REMINDER",
+      "reason": "The payment is below the approval limit and the score is under 70, so there is no policy stop, no transient retry, and no high-risk payment-link trigger; REMINDER is the final non-invasive fallback.",
+      "input": {
+        "event_id": "reminder_005",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_reminder_005",
+        "payment": {
+          "payment_id": "pay_reminder_005",
+          "amount": 140000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "payment_rejected",
+          "failed_at": "2026-08-29T08:30:00+00:00",
+          "time_since_failure_hours": 27
+        },
+        "customer": {
+          "customer_id": "cust_reminder_005",
+          "notification_count": 0,
+          "customer_age_days": 95,
+          "previous_successful_payments": 0,
+          "previous_failed_payments": 5,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 400000,
+          "average_previous_payment": 130000,
+          "recent_payment_frequency": 0
+        }
+      }
+    },
+    {
+      "id": "escalate_001",
+      "expected_action": "ESCALATE",
+      "reason": "The payment amount exceeds the automatic action limit (500000), so the deterministic policy flips to approval-required before the retry and payment-link checks.",
+      "input": {
+        "event_id": "escalate_001",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_escalate_001",
+        "payment": {
+          "payment_id": "pay_escalate_001",
+          "amount": 600000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "card_declined",
+          "failed_at": "2026-08-29T11:00:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_escalate_001",
+          "notification_count": 1,
+          "customer_age_days": 500,
+          "previous_successful_payments": 12,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 9000000,
+          "average_previous_payment": 450000,
+          "recent_payment_frequency": 7
+        }
+      }
+    },
+    {
+      "id": "escalate_002",
+      "expected_action": "ESCALATE",
+      "reason": "The backend sets requires_approval when amount > 500000, and this decision is enforced before auto-execution logic; a valid high-value payment therefore escalates.",
+      "input": {
+        "event_id": "escalate_002",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_escalate_002",
+        "payment": {
+          "payment_id": "pay_escalate_002",
+          "amount": 750000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "upi",
+          "failure_reason": "insufficient_funds",
+          "failed_at": "2026-08-29T11:10:00+00:00",
+          "time_since_failure_hours": 1
+        },
+        "customer": {
+          "customer_id": "cust_escalate_002",
+          "notification_count": 2,
+          "customer_age_days": 410,
+          "previous_successful_payments": 10,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 12000000,
+          "average_previous_payment": 500000,
+          "recent_payment_frequency": 8
+        }
+      }
+    },
+    {
+      "id": "escalate_003",
+      "expected_action": "ESCALATE",
+      "reason": "High-value payment amount above the merchant threshold creates approval-required status even when the customer profile is strong, so ESCALATE is selected ahead of action execution.",
+      "input": {
+        "event_id": "escalate_003",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_escalate_003",
+        "payment": {
+          "payment_id": "pay_escalate_003",
+          "amount": 820000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "netbanking",
+          "failure_reason": "fraud_check",
+          "failed_at": "2026-08-29T10:45:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_escalate_003",
+          "notification_count": 1,
+          "customer_age_days": 630,
+          "previous_successful_payments": 9,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 9800000,
+          "average_previous_payment": 420000,
+          "recent_payment_frequency": 5
+        }
+      }
+    },
+    {
+      "id": "escalate_004",
+      "expected_action": "ESCALATE",
+      "reason": "Amounts above the high-value threshold trigger requires_approval regardless of the non-transient failure reason; the backend chooses ESCALATE before auto-action logic.",
+      "input": {
+        "event_id": "escalate_004",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_escalate_004",
+        "payment": {
+          "payment_id": "pay_escalate_004",
+          "amount": 900000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "wallet",
+          "failure_reason": "payment_rejected",
+          "failed_at": "2026-08-29T11:15:00+00:00",
+          "time_since_failure_hours": 3
+        },
+        "customer": {
+          "customer_id": "cust_escalate_004",
+          "notification_count": 0,
+          "customer_age_days": 470,
+          "previous_successful_payments": 11,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 11000000,
+          "average_previous_payment": 480000,
+          "recent_payment_frequency": 6
+        }
+      }
+    },
+    {
+      "id": "escalate_005",
+      "expected_action": "ESCALATE",
+      "reason": "This is an extremely high-value failed payment and therefore requires merchant approval under the deterministic policy; it is not eligible for auto-action." ,
+      "input": {
+        "event_id": "escalate_005",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 1,
+        "payment_id": "pay_escalate_005",
+        "payment": {
+          "payment_id": "pay_escalate_005",
+          "amount": 1200000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "card_declined",
+          "failed_at": "2026-08-29T09:30:00+00:00",
+          "time_since_failure_hours": 6
+        },
+        "customer": {
+          "customer_id": "cust_escalate_005",
+          "notification_count": 1,
+          "customer_age_days": 280,
+          "previous_successful_payments": 7,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 1,
+          "customer_lifetime_value": 13000000,
+          "average_previous_payment": 640000,
+          "recent_payment_frequency": 4
+        }
+      }
+    },
+    {
+      "id": "stop_001",
+      "expected_action": "STOP",
+      "reason": "The payment is already successful, which is one of the hard-stop conditions in the risk engine; even if the event is marked as a failed payment attempt, the deterministic policy requires STOP.",
+      "input": {
+        "event_id": "stop_001",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_stop_001",
+        "payment": {
+          "payment_id": "pay_stop_001",
+          "amount": 90000,
+          "currency": "INR",
+          "status": "successful",
+          "payment_method": "card",
+          "failure_reason": "card_declined",
+          "failed_at": "2026-08-29T11:00:00+00:00",
+          "time_since_failure_hours": 2
+        },
+        "customer": {
+          "customer_id": "cust_stop_001",
+          "notification_count": 0,
+          "customer_age_days": 200,
+          "previous_successful_payments": 5,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 500000,
+          "average_previous_payment": 95000,
+          "recent_payment_frequency": 3
+        }
+      }
+    },
+    {
+      "id": "stop_002",
+      "expected_action": "STOP",
+      "reason": "The backend enforces a stop when recovery_attempt_count >= max_recovery_attempts, and the default policy limit is 2; this case exceeds the maximum allowed retry count.",
+      "input": {
+        "event_id": "stop_002",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 2,
+        "payment_id": "pay_stop_002",
+        "payment": {
+          "payment_id": "pay_stop_002",
+          "amount": 150000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "upi",
+          "failure_reason": "timeout",
+          "failed_at": "2026-08-29T11:00:00+00:00",
+          "time_since_failure_hours": 4
+        },
+        "customer": {
+          "customer_id": "cust_stop_002",
+          "notification_count": 0,
+          "customer_age_days": 360,
+          "previous_successful_payments": 7,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 2,
+          "customer_lifetime_value": 1200000,
+          "average_previous_payment": 150000,
+          "recent_payment_frequency": 5
+        }
+      }
+    },
+    {
+      "id": "stop_003",
+      "expected_action": "STOP",
+      "reason": "Recovery window expiry is a deterministic hard-stop condition: time_since_failure_hours > recovery_window_hours (default 48) forces STOP even when the payment otherwise looks eligible.",
+      "input": {
+        "event_id": "stop_003",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_stop_003",
+        "payment": {
+          "payment_id": "pay_stop_003",
+          "amount": 210000,
+          "currency": "INR",
+          "status": "failed",
+          "payment_method": "card",
+          "failure_reason": "network_error",
+          "failed_at": "2026-08-25T12:00:00+00:00",
+          "time_since_failure_hours": 72
+        },
+        "customer": {
+          "customer_id": "cust_stop_003",
+          "notification_count": 1,
+          "customer_age_days": 515,
+          "previous_successful_payments": 9,
+          "previous_failed_payments": 0,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 2800000,
+          "average_previous_payment": 230000,
+          "recent_payment_frequency": 4
+        }
+      }
+    },
+    {
+      "id": "stop_004",
+      "expected_action": "STOP",
+      "reason": "The payment status is permanently_closed, which is explicitly treated as a hard stop by the recovery eligibility rules.",
+      "input": {
+        "event_id": "stop_004",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_stop_004",
+        "payment": {
+          "payment_id": "pay_stop_004",
+          "amount": 175000,
+          "currency": "INR",
+          "status": "permanently_closed",
+          "payment_method": "netbanking",
+          "failure_reason": "bank_error",
+          "failed_at": "2026-08-29T10:00:00+00:00",
+          "time_since_failure_hours": 4
+        },
+        "customer": {
+          "customer_id": "cust_stop_004",
+          "notification_count": 1,
+          "customer_age_days": 300,
+          "previous_successful_payments": 6,
+          "previous_failed_payments": 1,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 1800000,
+          "average_previous_payment": 190000,
+          "recent_payment_frequency": 3
+        }
+      }
+    },
+    {
+      "id": "stop_005",
+      "expected_action": "STOP",
+      "reason": "A stopped payment is another deterministic hard-stop status; when the payment is no longer recoverable, the decision validator forces STOP regardless of failure reason or customer score.",
+      "input": {
+        "event_id": "stop_005",
+        "event_type": "payment_failed",
+        "timestamp": "2026-08-29T12:00:00+00:00",
+        "source": "n8n",
+        "recovery_attempt_count": 0,
+        "payment_id": "pay_stop_005",
+        "payment": {
+          "payment_id": "pay_stop_005",
+          "amount": 205000,
+          "currency": "INR",
+          "status": "stopped",
+          "payment_method": "wallet",
+          "failure_reason": "timeout",
+          "failed_at": "2026-08-29T07:00:00+00:00",
+          "time_since_failure_hours": 29
+        },
+        "customer": {
+          "customer_id": "cust_stop_005",
+          "notification_count": 2,
+          "customer_age_days": 700,
+          "previous_successful_payments": 13,
+          "previous_failed_payments": 2,
+          "previous_recovery_attempts": 0,
+          "customer_lifetime_value": 4500000,
+          "average_previous_payment": 260000,
+          "recent_payment_frequency": 7
+        }
+      }
+    }
+  ]
+}

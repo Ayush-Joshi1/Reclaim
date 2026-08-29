@@ -34,6 +34,39 @@ It returns normalized fields such as `id`, `order_id`, `amount`, `currency`, `st
 
 `RazorpayClient.fetch_payment(payment_id)` fetches one normalized payment. The client uses HTTP Basic Authentication, an explicit 10-second timeout, and no automatic retries.
 
+## Payment Link reconciliation
+
+Reclaim can reconcile Payment Links that it previously created through the authenticated
+`POST /api/reconciliation/run` entry point. Send `attempt_id` or `payment_id` to target
+one record, or an empty JSON object to reconcile all eligible links. Authenticate with
+`X-Reclaim-Workflow-Secret`. Reconciliation only reads the provider state; it never
+creates another Payment Link.
+
+`RECONCILIATION_MAX_ATTEMPTS` bounds provider lookups. Active links remain pending,
+paid links transition the associated payment and recovery attempt to `recovered`,
+expired links transition the attempt to `failed`, and cancelled/closed links transition
+it to `stopped`. Unknown provider states and provider errors are audited without
+changing local financial state. A newer local terminal state is never downgraded by
+stale provider data.
+
+## Recovery follow-up loop
+
+The authenticated `POST /api/recovery/follow-up` entry point processes one attempt,
+one payment, or a bounded batch of pending Payment Link recoveries. It persists a
+claim lease on the `RecoveryAttempt`, reconciles the existing link first, and only
+re-enters the normal risk, decision, validation, and execution pipeline after an
+expired or closed link when the existing recovery policy permits another attempt.
+
+Active or unknown links remain waiting, recovered and stopped states are not retried,
+and each new attempt receives a new event and attempt number. The endpoint is ready
+for n8n or a scheduler, but this repository does not run a background scheduler by
+itself; deployment must invoke the endpoint periodically.
+
+The development database bootstrap applies these additive audit columns with
+`create_tables()`. This repository does not contain a versioned migration system;
+production deployments must apply the equivalent `RecoveryAttempt` schema changes
+through the deployment's managed migration process before serving traffic.
+
 ## Error handling
 
 Provider failures are converted to safe exceptions without including credentials:

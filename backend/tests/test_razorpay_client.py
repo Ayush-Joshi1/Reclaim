@@ -81,6 +81,28 @@ def test_create_payment_link_uses_documented_endpoint_and_returns_safe_result() 
     assert link.short_url == "https://rzp.io/i/test123"
 
 
+def test_get_payment_link_uses_documented_endpoint_and_returns_safe_result() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/v1/payment_links/plink_test_123"
+        return httpx.Response(
+            200,
+            json={
+                "id": "plink_test_123",
+                "amount": 125000,
+                "currency": "INR",
+                "status": "paid",
+                "short_url": "https://rzp.io/i/test123",
+                "reference_id": "pay_test_123",
+            },
+        )
+
+    link = _client(httpx.MockTransport(handler)).get_payment_link("plink_test_123")
+
+    assert link.id == "plink_test_123"
+    assert link.status == "paid"
+
+
 @pytest.mark.parametrize(
     ("status_code", "exception_type"),
     [

@@ -22,7 +22,10 @@ class Settings:
     razorpay_base_url: str = "https://api.razorpay.com/v1"
     razorpay_actions_enabled: bool = False
     razorpay_test_mode: bool = False
+    razorpay_webhook_secret: str = ""
     reclaim_workflow_secret: str = ""
+    reconciliation_max_attempts: int = 3
+    follow_up_lease_seconds: int = 300
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -39,7 +42,10 @@ class Settings:
             razorpay_base_url=os.getenv("RAZORPAY_BASE_URL", "https://api.razorpay.com/v1"),
             razorpay_actions_enabled=os.getenv("RAZORPAY_ACTIONS_ENABLED", "false").lower() == "true",
             razorpay_test_mode=os.getenv("RAZORPAY_TEST_MODE", "false").lower() == "true",
+            razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET", ""),
             reclaim_workflow_secret=os.getenv("RECLAIM_WORKFLOW_SECRET", ""),
+            reconciliation_max_attempts=int(os.getenv("RECONCILIATION_MAX_ATTEMPTS", "3")),
+            follow_up_lease_seconds=int(os.getenv("FOLLOW_UP_LEASE_SECONDS", "300")),
         )
 
 

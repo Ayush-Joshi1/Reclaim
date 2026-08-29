@@ -2,9 +2,17 @@ import { NextResponse } from "next/server";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const paymentId = searchParams.get("payment_id");
+  const limit = searchParams.get("limit");
+  const query = new URLSearchParams();
+  if (paymentId) query.set("payment_id", paymentId);
+  if (limit) query.set("limit", limit);
+
   try {
-    const response = await fetch(`${backendUrl.replace(/\/$/, "")}/api/recovery/history`, {
+    const backendQuery = query.toString() ? `?${query.toString()}` : "";
+    const response = await fetch(`${backendUrl.replace(/\/$/, "")}/api/recovery/history${backendQuery}`, {
       cache: "no-store",
     });
     const responseBody: unknown = await response.json().catch(() => ({ detail: "Backend returned an invalid response." }));

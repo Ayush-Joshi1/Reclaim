@@ -69,6 +69,24 @@ export interface RecoveryHistoryRecord {
   attempt_number: number | null;
   created_at: string;
   completed_at: string | null;
+  execution_mode?: string;
+  provider_called?: boolean;
+  execution_succeeded?: boolean;
+  notification_generated?: boolean;
+  executed_at?: string | null;
+  recovery_state?: string | null;
+  state_reason?: string | null;
+  risk_score?: number | null;
+  risk_level?: string | null;
+  eligibility_result?: boolean | null;
+  eligibility_reason?: string | null;
+  decision_confidence?: number | null;
+  approval_required?: boolean | null;
+  validation_status?: string | null;
+  policy_override_reason?: string | null;
+  decision_diagnosis?: string | null;
+  decision_reasoning?: string | null;
+  policy_constraints?: string | null;
 }
 
 export async function evaluateRecovery(
@@ -112,8 +130,14 @@ function isRecoveryWorkflowResponse(body: unknown): body is RecoveryWorkflowResp
   );
 }
 
-export async function fetchRecoveryHistory(): Promise<RecoveryHistoryRecord[]> {
-  const response = await fetch("/api/recovery", { cache: "no-store" });
+export async function fetchRecoveryHistory(
+  paymentId?: string,
+  limit = 20,
+): Promise<RecoveryHistoryRecord[]> {
+  const params = new URLSearchParams();
+  if (paymentId) params.set("payment_id", paymentId);
+  params.set("limit", String(limit));
+  const response = await fetch(`/api/recovery?${params.toString()}`, { cache: "no-store" });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = isErrorBody(body) ? body.detail : undefined;
@@ -158,6 +182,19 @@ export interface RecoverySummary {
   total_successful_executions: number;
   total_failed_executions: number;
   total_dry_run_executions: number;
+  payments_analyzed: number;
+  revenue_at_risk: number;
+  total_revenue_at_risk: number;
+  revenue_recovered: number | null;
+  total_recovered: number;
+  recovery_rate: number;
+  average_recovered_amount: number;
+  interventions: number;
+  intervention_rate: number;
+  success_rate: number;
+  recovered_count: number | null;
+  escalation_rate: number;
+  stop_rate: number;
   action_counts: Record<string, number>;
   stop_count: number;
   escalate_count: number;
@@ -187,6 +224,16 @@ function isRecoverySummary(body: unknown): body is RecoverySummary {
     typeof summary.total_successful_executions === "number" &&
     typeof summary.total_failed_executions === "number" &&
     typeof summary.total_dry_run_executions === "number" &&
+    typeof summary.payments_analyzed === "number" &&
+    typeof summary.revenue_at_risk === "number" &&
+    typeof summary.total_revenue_at_risk === "number" &&
+    typeof summary.recovery_rate === "number" &&
+    typeof summary.average_recovered_amount === "number" &&
+    typeof summary.interventions === "number" &&
+    typeof summary.intervention_rate === "number" &&
+    typeof summary.success_rate === "number" &&
+    typeof summary.escalation_rate === "number" &&
+    typeof summary.stop_rate === "number" &&
     typeof summary.action_counts === "object" &&
     summary.action_counts !== null &&
     Array.isArray(summary.recent_activity)

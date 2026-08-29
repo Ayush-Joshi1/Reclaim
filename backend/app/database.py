@@ -41,6 +41,9 @@ def create_tables() -> None:
     """Create current tables and apply safe local schema additions."""
     from app import models  # noqa: F401  Ensure model metadata is registered.
 
+    # Ensure the additive schema updates exist before the app begins serving requests.
+    # This keeps the development database compatible with the stateful recovery model.
+
     Base.metadata.create_all(bind=engine)
     inspector = inspect(engine)
     if "recovery_attempts" not in inspector.get_table_names():
@@ -58,6 +61,34 @@ def create_tables() -> None:
             "execution_succeeded": "BOOLEAN NOT NULL DEFAULT TRUE",
             "notification_generated": "BOOLEAN NOT NULL DEFAULT FALSE",
             "executed_at": "TIMESTAMP WITH TIME ZONE",
+            "recovery_state": "VARCHAR(50)",
+            "state_reason": "VARCHAR(500)",
+            "provider_payment_id": "VARCHAR(255)",
+            "provider_payment_link_id": "VARCHAR(255)",
+            "provider_reference_id": "VARCHAR(255)",
+            "risk_score": "INTEGER",
+            "risk_level": "VARCHAR(20)",
+            "eligibility_result": "BOOLEAN",
+            "eligibility_reason": "VARCHAR(1000)",
+            "decision_confidence": "DOUBLE PRECISION",
+            "approval_required": "BOOLEAN",
+            "validation_status": "VARCHAR(20)",
+            "policy_override_reason": "VARCHAR(1000)",
+            "decision_diagnosis": "VARCHAR(400)",
+            "decision_reasoning": "VARCHAR(800)",
+            "policy_constraints": "VARCHAR(4000)",
+            "reconciliation_status": "VARCHAR(50)",
+            "reconciliation_previous_state": "VARCHAR(50)",
+            "reconciliation_provider_state": "VARCHAR(50)",
+            "reconciliation_resulting_state": "VARCHAR(50)",
+            "reconciliation_reason": "VARCHAR(500)",
+            "reconciled_at": "TIMESTAMP WITH TIME ZONE",
+            "reconciliation_attempts": "INTEGER NOT NULL DEFAULT 0",
+            "follow_up_status": "VARCHAR(50)",
+            "follow_up_last_reason": "VARCHAR(500)",
+            "follow_up_last_run_at": "TIMESTAMP WITH TIME ZONE",
+            "follow_up_next_at": "TIMESTAMP WITH TIME ZONE",
+            "follow_up_claimed_until": "TIMESTAMP WITH TIME ZONE",
         }
         for name, definition in additions.items():
             if name not in columns:
@@ -68,3 +99,19 @@ def create_tables() -> None:
                 "ON recovery_attempts (event_id) WHERE event_id IS NOT NULL"
             )
         )
+
+    if "payments" not in inspector.get_table_names():
+        return
+
+    payment_columns = {column["name"] for column in inspector.get_columns("payments")}
+    with engine.begin() as connection:
+        payment_additions = {
+            "recovery_state": "VARCHAR(50)",
+            "state_updated_at": "TIMESTAMP WITH TIME ZONE",
+        }
+        for name, definition in payment_additions.items():
+            if name not in payment_columns:
+                connection.execute(text(f"ALTER TABLE payments ADD COLUMN {name} {definition}"))
+
+
+create_tables()

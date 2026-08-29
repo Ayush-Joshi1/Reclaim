@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 import threading
 from typing import Callable, Protocol
@@ -27,6 +28,7 @@ from app.services.recovery_decision import RecoveryDecisionService
 from app.services.revenue_risk import RevenueRiskEngine
 from app.services.razorpay_client import RazorpayClient
 from app.services.action_executor import ActionExecutor, DryRunActionExecutor, RazorpayActionExecutor
+from app.services.recovery_state import RecoveryStateMachine
 
 
 class WorkflowPaymentClient(Protocol):
@@ -51,7 +53,7 @@ class RecoveryWorkflowService:
         self._llm_client = llm_client
         self._policy = policy or MerchantPolicy()
         self._session_factory = session_factory
-        self._action_executor = action_executor or DryRunActionExecutor()
+        self._action_executor = action_executor or RazorpayActionExecutor.from_settings()
         self._processed: dict[str, RecoveryWorkflowResponse] = {}
         self._lock = threading.Lock()
 
@@ -68,13 +70,30 @@ class RecoveryWorkflowService:
         risk_result = RevenueRiskEngine().evaluate(payment, customer, history, self._policy)
         context = build_recovery_context(payment, customer, history, risk_result, self._policy)
         decision = RecoveryDecisionService(self._decision_client()).decide(context)
+
+        current_state = RecoveryStateMachine.for_payment_status(payment.status)
+        if current_state == "stopped":
+            decision = decision.model_copy(update={"action": "STOP", "requires_approval": False})
+            decision = decision.model_copy(update={"recovery_eligible": False, "validation_status": "OVERRIDDEN", "validation_notes": ["Payment is not in a recoverable failed state."]})
+        if decision.action == "STOP":
+            current_state = "stopped"
+        elif decision.requires_approval:
+            current_state = "approval_required"
+        elif decision.recovery_eligible:
+            current_state = "eligible"
+        else:
+            current_state = "ignored"
+
+        if current_state in {"duplicate", "ignored", "failed", "recovered"}:
+            RecoveryStateMachine.ensure_execution_allowed(current_state)
+
         provisional_result = DryRunActionExecutor().execute(decision)
         provisional_response = RecoveryWorkflowResponse.from_decision(
             event_id, decision, provisional_result
         )
         if self._session_factory is not None:
             persisted_response = self._persist_evaluation(
-                event_id, payment, provisional_response, event.recovery_attempt_count + 1
+                event_id, payment, provisional_response, event.recovery_attempt_count + 1, current_state
             )
             if persisted_response.duplicate:
                 return persisted_response
@@ -89,7 +108,7 @@ class RecoveryWorkflowService:
         )
         response = provisional_response.model_copy(update={"result": result})
         if self._session_factory is not None:
-            self._update_execution_metadata(event_id, result)
+            self._update_execution_metadata(event_id, result, current_state)
 
         with self._lock:
             existing = self._processed.setdefault(event_id, response)
@@ -103,6 +122,7 @@ class RecoveryWorkflowService:
         payment: PaymentRiskInput,
         response: RecoveryWorkflowResponse,
         attempt_number: int,
+        recovery_state: str | None = None,
     ) -> RecoveryWorkflowResponse:
         """Commit one audit record, relying on the database for cross-process uniqueness."""
         create_tables()
@@ -144,6 +164,26 @@ class RecoveryWorkflowService:
                 executed_at=response.result.executed_at,
                 action=response.action,
                 status=response.result.status,
+                recovery_state=recovery_state or "detected",
+                state_reason=response.result.message,
+                provider_payment_id=response.result.provider_payment_id,
+                provider_payment_link_id=response.result.provider_payment_link_id,
+                provider_reference_id=response.result.provider_reference_id,
+                risk_score=response.decision.risk_score,
+                risk_level=response.decision.priority,
+                eligibility_result=response.decision.recovery_eligible,
+                eligibility_reason=" ".join(response.decision.validation_notes),
+                decision_confidence=response.decision.confidence,
+                approval_required=response.decision.requires_approval,
+                validation_status=response.decision.validation_status,
+                policy_override_reason=(
+                    " ".join(response.decision.validation_notes)
+                    if response.decision.validation_status == "OVERRIDDEN"
+                    else None
+                ),
+                decision_diagnosis=response.decision.diagnosis,
+                decision_reasoning=response.decision.reasoning,
+                policy_constraints=json.dumps(response.decision.policy_constraints),
                 amount=payment.amount,
             )
             session.add(attempt)
@@ -160,7 +200,12 @@ class RecoveryWorkflowService:
         finally:
             session.close()
 
-    def _update_execution_metadata(self, event_id: str, result: RecoveryActionResult) -> None:
+    def _update_execution_metadata(
+        self,
+        event_id: str,
+        result: RecoveryActionResult,
+        recovery_state: str | None = None,
+    ) -> None:
         """Record the final safe execution outcome after the audit insert."""
         session = self._session_factory()
         try:
@@ -174,6 +219,11 @@ class RecoveryWorkflowService:
                 attempt.execution_succeeded = result.execution_succeeded
                 attempt.notification_generated = result.notification_generated
                 attempt.executed_at = result.executed_at
+                attempt.provider_payment_id = result.provider_payment_id or attempt.provider_payment_id
+                attempt.provider_payment_link_id = result.provider_payment_link_id or attempt.provider_payment_link_id
+                attempt.provider_reference_id = result.provider_reference_id or attempt.provider_reference_id
+                attempt.recovery_state = recovery_state or attempt.recovery_state or "detected"
+                attempt.state_reason = result.message
                 session.commit()
         finally:
             session.close()
@@ -296,7 +346,4 @@ class RecoveryWorkflowService:
         return f"derived-{digest}"
 
 
-workflow_service = RecoveryWorkflowService(
-    session_factory=SessionLocal,
-    action_executor=RazorpayActionExecutor.from_settings(),
-)
+workflow_service = RecoveryWorkflowService(session_factory=SessionLocal)

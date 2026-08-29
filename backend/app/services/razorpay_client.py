@@ -74,6 +74,15 @@ class RazorpayClient:
         """Fetch and normalize one payment."""
         return self._parse_payment(self._request("GET", f"payments/{payment_id}"))
 
+    def get_payment_link(self, payment_link_id: str) -> RazorpayPaymentLink:
+        """Fetch and normalize one Payment Link."""
+        try:
+            return RazorpayPaymentLink.model_validate(
+                self._request("GET", f"payment_links/{payment_link_id}")
+            )
+        except (TypeError, ValueError) as error:
+            raise RazorpayMalformedResponseError("Razorpay returned an invalid Payment Link.") from error
+
     def create_payment_link(
         self, amount: int, currency: str, reference_id: str, description: str
     ) -> RazorpayPaymentLink:

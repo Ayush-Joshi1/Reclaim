@@ -1,15 +1,22 @@
 """Tests for the authenticated n8n recovery orchestration boundary."""
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app import config
 from app.config import Settings
+from app.database import SessionLocal
 from app.main import app
+from app.models import RecoveryAttempt
 from app.schemas import CustomerRiskContext, PaymentRiskInput, RecoveryEvent
+from app.schemas.razorpay import RazorpayPaymentLink
+from app.services.action_executor import RazorpayActionExecutor
 from app.services.recovery_workflow import RecoveryWorkflowService, workflow_service
 from app.services.razorpay_client import RazorpayNotFoundError
 
@@ -82,6 +89,32 @@ def test_valid_workflow_event_reaches_decision_layer() -> None:
     }
 
 
+def test_validated_decision_lineage_is_persisted() -> None:
+    event = event_data(event_id="evt-lineage-persisted")
+    response = TestClient(app).post(
+        "/api/workflows/recovery",
+        headers={"X-Reclaim-Workflow-Secret": SECRET},
+        json=event,
+    )
+
+    assert response.status_code == 200
+    with SessionLocal() as session:
+        attempt = session.scalar(
+            select(RecoveryAttempt).where(RecoveryAttempt.event_id == "evt-lineage-persisted")
+        )
+        assert attempt is not None
+        assert attempt.risk_score is not None
+        assert attempt.risk_level == "HIGH"
+        assert attempt.eligibility_result is True
+        assert attempt.eligibility_reason
+        assert attempt.decision_confidence == 0.7
+        assert attempt.approval_required is False
+        assert attempt.validation_status == "VALID"
+        assert attempt.decision_diagnosis
+        assert attempt.decision_reasoning
+        assert attempt.policy_constraints
+
+
 def test_missing_and_invalid_authentication_are_rejected() -> None:
     client = TestClient(app)
     payload = event_data()
@@ -96,6 +129,24 @@ def test_missing_and_invalid_authentication_are_rejected() -> None:
     assert missing.status_code == 401
     assert invalid.status_code == 403
     assert "workflow-test-secret" not in missing.text + invalid.text
+
+
+def test_n8n_workflow_uses_current_backend_contract() -> None:
+    workflow_path = Path(__file__).resolve().parents[2] / "workflows" / "reclaim-recovery-orchestration.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+    text = workflow_path.read_text(encoding="utf-8")
+
+    endpoint_calls = [
+        node["parameters"]["url"]
+        for node in workflow["nodes"]
+        if node.get("type") == "n8n-nodes-base.httpRequest"
+    ]
+
+    assert any("/api/workflows/recovery" in url for url in endpoint_calls)
+    assert "reclaim-demo-secret-2026" not in text
+    assert "RECLAIM_WORKFLOW_SECRET" in text
+    assert "RECLAIM_BACKEND_URL" in text
+    assert "X-Reclaim-Workflow-Secret" in text
 
 
 def test_invalid_payload_is_rejected() -> None:
@@ -173,6 +224,46 @@ def test_duplicate_event_returns_cached_result_without_reprocessing() -> None:
     assert duplicate.duplicate is True
     assert duplicate.event_id == first.event_id
     assert duplicate.result == first.result
+
+
+def test_provider_executor_is_used_for_payment_link_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[int, str, str, str]] = []
+
+    class PaymentLinkClient:
+        def create_payment_link(self, amount: int, currency: str, reference_id: str, description: str) -> RazorpayPaymentLink:
+            calls.append((amount, currency, reference_id, description))
+            return RazorpayPaymentLink(
+                id="plink_live_123",
+                amount=amount,
+                currency=currency,
+                status="created",
+                short_url="https://rzp.io/i/live123",
+                reference_id=reference_id,
+            )
+
+    executor = RazorpayActionExecutor(PaymentLinkClient(), enabled=True)
+    monkeypatch.setattr(
+        "app.services.recovery_workflow.RazorpayActionExecutor.from_settings",
+        lambda configured=None: executor,
+    )
+
+    event = RecoveryEvent(
+        **event_data(
+            event_id="evt-provider-link",
+            payment=payment_data(amount=125_000, failure_reason="card_declined"),
+        )
+    )
+    service = RecoveryWorkflowService()
+
+    result = service.process(event)
+
+    assert result.action == "PAYMENT_LINK"
+    assert result.result.execution_mode == "provider"
+    assert result.result.provider_called is True
+    assert calls == [(125_000, "INR", "pay_workflow_test", "Recovery payment for pay_workflow_test")]
+    assert "https://rzp.io/i/live123" in result.result.message
 
 
 def test_internal_failure_is_safe(monkeypatch: pytest.MonkeyPatch) -> None:

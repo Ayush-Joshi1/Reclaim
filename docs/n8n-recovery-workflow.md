@@ -16,10 +16,11 @@ Razorpay Test Mode variables remain those documented in [`razorpay-integration.m
 ## Import and configure n8n Cloud
 
 1. Import [`workflows/reclaim-recovery-orchestration.json`](../workflows/reclaim-recovery-orchestration.json) from **Workflows** in n8n Cloud.
-2. Set the **Reclaim Recovery Evaluation** URL to a backend URL reachable from n8n. The checked-in value is a local-development placeholder.
-3. Configure the `X-Reclaim-Workflow-Secret` header with the same value as the backend's `RECLAIM_WORKFLOW_SECRET`. Prefer an n8n environment variable or secret, not a literal value in the workflow.
-4. Activate the workflow and copy the generated webhook URL. If the backend is local, expose it to n8n only through a temporary authenticated development tunnel.
-5. Keep the workflow inactive until the backend and secret have been configured.
+2. Set the **Reclaim Recovery Evaluation** URL base to a backend URL reachable from n8n by creating a workflow variable named `RECLAIM_BACKEND_URL` under **Settings > Variables** and keeping the HTTP Request node target at `={{ $vars.RECLAIM_BACKEND_URL }}/api/workflows/recovery`. The checked-in value is a placeholder and must be replaced in n8n Cloud.
+3. Keep the existing n8n authentication configuration exactly as imported: **Authentication = Generic Credential Type**, **Generic Auth Type = Header Auth**, and the existing **Header Auth account**. Do not replace it with Basic Auth, Bearer, or another type.
+4. In n8n Cloud, create a workflow variable named `RECLAIM_WORKFLOW_SECRET` under **Settings > Variables**, using the exact same value configured as the backend's `RECLAIM_WORKFLOW_SECRET`. The imported HTTP node reads it as `={{ $vars.RECLAIM_WORKFLOW_SECRET }}` and sends it in the `X-Reclaim-Workflow-Secret` header. Do not put the secret literally in the workflow JSON.
+5. Activate the workflow and copy the generated webhook URL. If the backend is local, expose it to n8n only through a temporary authenticated development tunnel.
+6. Keep the workflow inactive until the backend and secret have been configured.
 
 The backend endpoint is:
 

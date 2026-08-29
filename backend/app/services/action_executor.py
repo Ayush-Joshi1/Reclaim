@@ -138,6 +138,7 @@ class RazorpayActionExecutor:
                 status="terminal",
                 message="Payment Link provider failed; no further action was performed.",
                 execution_mode="provider",
+                provider_called=True,
                 execution_succeeded=False,
                 event_id=event_id,
                 executed_at=datetime.now(UTC),
@@ -149,6 +150,8 @@ class RazorpayActionExecutor:
             message=f"Payment Link created in the configured Razorpay environment: {link.short_url}",
             execution_mode="provider",
             provider_called=True,
+            provider_payment_link_id=link.id,
+            provider_reference_id=decision.payment_id[:40],
             event_id=event_id,
             executed_at=datetime.now(UTC),
         )
