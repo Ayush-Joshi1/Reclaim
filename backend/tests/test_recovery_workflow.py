@@ -1,6 +1,7 @@
 """Tests for the authenticated n8n recovery orchestration boundary."""
 
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -301,8 +302,9 @@ def test_provider_executor_is_used_for_payment_link_when_enabled(
 def test_route_executes_real_razorpay_client_for_payment_link(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    payment_id = "pay-route-provider-001"
-    event_id = "evt-route-provider-001"
+    workflow_service.clear_idempotency()
+    payment_id = f"pay-route-provider-{uuid.uuid4().hex[:12]}"
+    event_id = f"evt-route-provider-{uuid.uuid4().hex[:12]}"
     captured: dict[str, Any] = {}
 
     def provider_handler(request: httpx.Request) -> httpx.Response:

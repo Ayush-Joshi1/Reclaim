@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 import httpx
 
 from app.schemas.recovery_decision import RecoveryContext
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClientError(RuntimeError):
@@ -81,13 +85,65 @@ class OpenAICompatibleLLMClient:
         return response_body[:500]
 
     @staticmethod
-    def _parse_json_content(content: str) -> Any:
-        lines = content.strip().splitlines()
-        if len(lines) >= 2 and lines[0].strip().startswith("```") and lines[-1].strip() == "```":
-            opening_fence = lines[0].strip()
-            if opening_fence in {"```", "```json"}:
-                content = "\n".join(lines[1:-1]).strip()
-        return json.loads(content)
+    def _decode_json_text(content: str) -> Any:
+        text = content.strip()
+        if not text:
+            raise ValueError("The provider returned empty JSON content.")
+
+        candidates = [text]
+
+        if "```" in text:
+            fenced_parts = [part.strip() for part in text.split("```") if part.strip()]
+            candidates.extend(fenced_parts)
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if candidate.lower().startswith("json"):
+                candidate = candidate[4:].strip()
+            candidate = candidate.strip()
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+            for start_char, end_char in (("{", "}"), ("[", "]")):
+                start = candidate.find(start_char)
+                end = candidate.rfind(end_char)
+                if start != -1 and end > start:
+                    json_candidate = candidate[start : end + 1]
+                    try:
+                        return json.loads(json_candidate)
+                    except json.JSONDecodeError:
+                        continue
+
+        return json.loads(text)
+
+    @staticmethod
+    def _parse_json_content(content: Any) -> Any:
+        if isinstance(content, (dict, list)):
+            return content
+        if not isinstance(content, str):
+            raise TypeError("Provider content is neither JSON nor a string.")
+        return OpenAICompatibleLLMClient._decode_json_text(content)
+
+    @staticmethod
+    def _collect_text_values(node: Any) -> list[str]:
+        values: list[str] = []
+        if isinstance(node, str):
+            values.append(node)
+            return values
+        if isinstance(node, list):
+            for item in node:
+                values.extend(OpenAICompatibleLLMClient._collect_text_values(item))
+            return values
+        if isinstance(node, dict):
+            for key in ("text", "content", "value"):
+                if key in node:
+                    values.extend(OpenAICompatibleLLMClient._collect_text_values(node[key]))
+            if not values and "parts" in node:
+                values.extend(OpenAICompatibleLLMClient._collect_text_values(node["parts"]))
+        return values
 
     @staticmethod
     def _extract_content(payload: dict[str, Any]) -> str:
@@ -97,37 +153,41 @@ class OpenAICompatibleLLMClient:
             if isinstance(first_choice, dict):
                 message = first_choice.get("message")
                 if isinstance(message, dict):
-                    content = message.get("content")
-                    if isinstance(content, str):
-                        return content
-                    if isinstance(content, list):
-                        text_parts: list[str] = []
-                        for item in content:
-                            if isinstance(item, dict):
-                                text = item.get("text")
-                                if isinstance(text, str):
-                                    text_parts.append(text)
-                        if text_parts:
-                            return "".join(text_parts)
+                    text_values = OpenAICompatibleLLMClient._collect_text_values(message.get("content"))
+                    if text_values:
+                        return "".join(text_values)
 
         candidates = payload.get("candidates")
         if isinstance(candidates, list) and candidates:
             first_candidate = candidates[0]
             if isinstance(first_candidate, dict):
-                content = first_candidate.get("content")
-                if isinstance(content, dict):
-                    parts = content.get("parts")
-                    if isinstance(parts, list):
-                        text_parts: list[str] = []
-                        for item in parts:
-                            if isinstance(item, dict):
-                                text = item.get("text")
-                                if isinstance(text, str):
-                                    text_parts.append(text)
-                        if text_parts:
-                            return "".join(text_parts)
+                text_values = OpenAICompatibleLLMClient._collect_text_values(first_candidate.get("content"))
+                if text_values:
+                    return "".join(text_values)
+
+        if isinstance(payload.get("content"), str):
+            return payload["content"]
+
+        if isinstance(payload.get("output_text"), str):
+            return payload["output_text"]
 
         raise LLMClientError("The configured LLM did not return a usable structured decision.")
+
+    def _log_safe_provider_failure(self, response: Any, error: Exception) -> None:
+        host = urlparse(self._base_url).netloc or "unknown-host"
+        status_code = getattr(response, "status_code", "unknown")
+        content_type = getattr(response, "headers", {}).get("content-type", "unknown")
+        preview = self._safe_response_body(response) if response is not None else "[no response body]"
+        logger.warning(
+            "LLM provider failure: host=%s model=%s status=%s content_type=%s body_preview=%s error=%s:%s",
+            host,
+            self._model,
+            status_code,
+            content_type,
+            preview,
+            type(error).__name__,
+            str(error)[:200],
+        )
 
     def generate_recovery_decision(self, context: RecoveryContext) -> dict[str, Any]:
         """Request structured JSON without exposing provider credentials in errors."""
@@ -143,20 +203,24 @@ class OpenAICompatibleLLMClient:
             parsed = self._parse_json_content(self._extract_content(response.json()))
         except httpx.HTTPStatusError as error:
             if error.response is None:
+                self._log_safe_provider_failure(response, error)
                 raise LLMClientError(
                     "The configured LLM did not return a usable structured decision."
                 ) from error
+            self._log_safe_provider_failure(error.response, error)
             raise LLMClientError(
                 f"LLM provider returned HTTP {getattr(error.response, 'status_code', 'unknown')}: "
                 f"{self._safe_response_body(error.response)}"
             ) from error
         except LLMClientError as error:
+            self._log_safe_provider_failure(response, error)
             raise LLMClientError(
                 f"LLM provider returned HTTP {getattr(response, 'status_code', 'unknown')} "
                 f"with an unusable response: "
                 f"{self._safe_response_body(response)}"
             ) from error
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            self._log_safe_provider_failure(response, error)
             if response is None:
                 raise LLMClientError(
                     "The configured LLM did not return a usable structured decision."

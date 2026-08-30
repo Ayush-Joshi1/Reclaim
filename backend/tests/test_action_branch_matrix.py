@@ -1,6 +1,7 @@
 """Comprehensive action branch test matrix for recovery workflow."""
 
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -208,10 +209,12 @@ class TestStopDuplicate:
     def test_duplicate_event_marked_in_response(self) -> None:
         """Verify duplicate detection flag is present in response."""
         client = TestClient(app)
+        payment_id = f"pay_duplicate_unique_{uuid.uuid4().hex[:12]}"
+        event_id = f"evt_duplicate_unique_{uuid.uuid4().hex[:12]}"
         event = event_data(
-            event_id="evt_duplicate_unique_001",
-            payment_id="pay_duplicate_unique_001",
-            payment=payment_data(payment_id="pay_duplicate_unique_001"),
+            event_id=event_id,
+            payment_id=payment_id,
+            payment=payment_data(payment_id=payment_id),
         )
 
         # First call should have duplicate=false

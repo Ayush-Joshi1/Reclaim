@@ -331,6 +331,55 @@ def test_gemini_structured_response_is_parsed(monkeypatch: pytest.MonkeyPatch) -
     assert result["confidence"] == 0.8
 
 
+def test_markdown_fenced_json_response_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        model="gpt-4o-mini",
+        base_url="https://api.openai.com/v1",
+    )
+
+    class DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        @property
+        def status_code(self) -> int:
+            return 200
+
+        @property
+        def headers(self) -> dict[str, str]:
+            return {"content-type": "application/json"}
+
+        @property
+        def text(self) -> str:
+            return '{"choices":[{"message":{"content":"```json\\n{\\"action\\":\\"PAYMENT_LINK\\",\\"diagnosis\\":\\"Strong customer signal\\",\\"reasoning\\":\\"High-confidence card decline with recent payment history\\",\\"confidence\\":0.9,\\"requires_approval\\":false,\\"priority\\":\\"HIGH\\",\\"policy_constraints\\":[],\\"expected_outcome\\":\\"Offer a payment link for this eligible customer\\"}\\n```"}}]}'
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "```json\n"
+                                '{"action":"PAYMENT_LINK","diagnosis":"Strong customer signal",'
+                                '"reasoning":"High-confidence card decline with recent payment history",'
+                                '"confidence":0.9,"requires_approval":false,"priority":"HIGH",'
+                                '"policy_constraints":[],"expected_outcome":"Offer a payment link for this eligible customer"}'
+                                "\n```"
+                            )
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: DummyResponse())
+
+    result = client.generate_recovery_decision(_context())
+
+    assert result["action"] == "PAYMENT_LINK"
+    assert result["confidence"] == 0.9
+
+
 def test_gemini_request_uses_bearer_auth_without_logging_key(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
