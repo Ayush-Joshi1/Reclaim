@@ -7,27 +7,27 @@
         "responseMode": "lastNode",
         "options": {}
       },
-      "id": "7b268383-d532-4a02-aa82-3b04a2a01ac1",
+      "id": "6651b1a3-e046-4661-b60e-270d01dd61ec",
       "name": "Recovery Event Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -8992,
-        2896
+        -14496,
+        5984
       ],
       "webhookId": "reclaim-recovery-webhook"
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json || {};\nlet b = item;\nif (b && typeof b === \"object\" && Object.prototype.hasOwnProperty.call(b, \"body\")) {\n  b = b.body;\n}\nif (typeof b === \"string\") {\n  try {\n    b = JSON.parse(b);\n  } catch {\n    b = {};\n  }\n}\nif (!b || typeof b !== \"object\" || Array.isArray(b)) b = {};\nconst payment = b.payment && typeof b.payment === \"object\" && !Array.isArray(b.payment) ? b.payment : {};\nconst customer = b.customer && typeof b.customer === \"object\" && !Array.isArray(b.customer) ? b.customer : {};\n\nconst ALLOWED_EVENT_TYPES = [\"payment_failed\"];\nconst ALLOWED_METHODS = [\"card\", \"upi\", \"netbanking\", \"wallet\", \"bank_transfer\"];\nconst errors = [];\nfunction present(v) { return v !== undefined && v !== null && v !== \"\"; }\nfunction isNum(v) { return v !== null && v !== undefined && v !== \"\" && !Number.isNaN(Number(v)); }\nfunction num(v) { return isNum(v) ? Number(v) : v; }\nfunction isIso(v) { if (!present(v)) return false; const d = new Date(v); return !Number.isNaN(d.getTime()); }\n\nconst paymentId = present(b.payment_id) ? String(b.payment_id) : (present(payment.payment_id) ? String(payment.payment_id) : null);\nconst topRequired = [\"event_id\", \"event_type\", \"timestamp\", \"source\", \"recovery_attempt_count\"];\nfor (const f of topRequired) { if (!present(b[f]) && b[f] !== 0) errors.push(\"Missing field: \" + f); }\nif (!paymentId) errors.push(\"Missing field: payment_id\");\nif (!b.payment || typeof b.payment !== \"object\" || Array.isArray(b.payment)) errors.push(\"Missing field: payment\");\nif (!b.customer || typeof b.customer !== \"object\" || Array.isArray(b.customer)) errors.push(\"Missing field: customer\");\n\nconst paymentRequired = [\"amount\", \"currency\", \"status\", \"payment_method\", \"failed_at\", \"time_since_failure_hours\"];\nfor (const f of paymentRequired) { if (!present(payment[f]) && payment[f] !== 0) errors.push(\"Missing payment field: \" + f); }\nconst customerRequired = [\"customer_id\", \"notification_count\", \"customer_age_days\", \"previous_successful_payments\", \"previous_failed_payments\", \"previous_recovery_attempts\", \"customer_lifetime_value\", \"average_previous_payment\", \"recent_payment_frequency\"];\nfor (const f of customerRequired) { if (!present(customer[f]) && customer[f] !== 0) errors.push(\"Missing customer field: \" + f); }\n\nconst eventType = typeof b.event_type === \"string\" ? b.event_type.trim().toLowerCase() : String(b.event_type || \"\").toLowerCase();\nif (present(b.event_type) && !ALLOWED_EVENT_TYPES.includes(eventType)) errors.push(\"Invalid event_type: \" + b.event_type);\nconst method = typeof payment.payment_method === \"string\" ? payment.payment_method.trim().toLowerCase() : String(payment.payment_method || \"\").toLowerCase();\nif (present(payment.payment_method) && !ALLOWED_METHODS.includes(method)) errors.push(\"Invalid payment_method: \" + payment.payment_method);\nconst currency = typeof payment.currency === \"string\" ? payment.currency.trim().toUpperCase() : String(payment.currency || \"\").toUpperCase();\nif (present(payment.currency) && (currency.length < 1 || currency.length > 3)) errors.push(\"Invalid currency: \" + payment.currency);\nif (present(b.timestamp) && !isIso(b.timestamp)) errors.push(\"Invalid timestamp (not ISO datetime): \" + b.timestamp);\nif (present(payment.failed_at) && !isIso(payment.failed_at)) errors.push(\"Invalid payment.failed_at (not ISO datetime): \" + payment.failed_at);\nif (present(b.recovery_attempt_count) && !isNum(b.recovery_attempt_count)) errors.push(\"Invalid numeric value: recovery_attempt_count\");\nfor (const f of [\"amount\", \"time_since_failure_hours\"]) { if (present(payment[f]) && !isNum(payment[f])) errors.push(\"Invalid numeric value: payment.\" + f); }\nfor (const f of [\"notification_count\", \"customer_age_days\", \"previous_successful_payments\", \"previous_failed_payments\", \"previous_recovery_attempts\", \"customer_lifetime_value\", \"average_previous_payment\", \"recent_payment_frequency\"]) { if (present(customer[f]) && !isNum(customer[f])) errors.push(\"Invalid numeric value: customer.\" + f); }\n\nconst api_payload = {\n  event_id: present(b.event_id) ? String(b.event_id) : null,\n  event_type: eventType,\n  timestamp: b.timestamp,\n  source: b.source,\n  recovery_attempt_count: num(b.recovery_attempt_count),\n  payment_id: paymentId,\n  payment: {\n    payment_id: paymentId,\n    amount: num(payment.amount),\n    currency,\n    status: payment.status,\n    payment_method: method,\n    failure_reason: present(payment.failure_reason) ? String(payment.failure_reason) : null,\n    failed_at: payment.failed_at,\n    time_since_failure_hours: num(payment.time_since_failure_hours)\n  },\n  customer: {\n    customer_id: customer.customer_id,\n    notification_count: num(customer.notification_count),\n    customer_age_days: num(customer.customer_age_days),\n    previous_successful_payments: num(customer.previous_successful_payments),\n    previous_failed_payments: num(customer.previous_failed_payments),\n    previous_recovery_attempts: num(customer.previous_recovery_attempts),\n    customer_lifetime_value: num(customer.customer_lifetime_value),\n    average_previous_payment: num(customer.average_previous_payment),\n    recent_payment_frequency: num(customer.recent_payment_frequency)\n  }\n};\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    error_message: errors.length ? errors.join(\"; \") : null,\n    event_id: present(b.event_id) ? String(b.event_id) : null,\n    payment_id: paymentId,\n    api_payload\n  }\n}];"
+        "jsCode": "const item = $input.first().json || {};\nlet b = item;\nif (b && typeof b === \"object\" && Object.prototype.hasOwnProperty.call(b, \"body\")) {\n  b = b.body;\n}\nif (typeof b === \"string\") {\n  try {\n    b = JSON.parse(b);\n  } catch {\n    b = {};\n  }\n}\nif (!b || typeof b !== \"object\" || Array.isArray(b)) b = {};\nconst payment = b.payment && typeof b.payment === \"object\" && !Array.isArray(b.payment) ? b.payment : {};\nconst customer = b.customer && typeof b.customer === \"object\" && !Array.isArray(b.customer) ? b.customer : {};\n\nconst ALLOWED_EVENT_TYPES = [\"payment_failed\"];\nconst ALLOWED_METHODS = [\"card\", \"upi\", \"netbanking\", \"wallet\", \"bank_transfer\"];\nconst errors = [];\nfunction present(v) { return v !== undefined && v !== null && v !== \"\"; }\nfunction isNum(v) { return v !== null && v !== undefined && v !== \"\" && !Number.isNaN(Number(v)); }\nfunction num(v) { return isNum(v) ? Number(v) : v; }\nfunction isIso(v) { if (!present(v)) return false; const d = new Date(v); return !Number.isNaN(d.getTime()); }\n\nconst paymentId = present(b.payment_id) ? String(b.payment_id) : (present(payment.payment_id) ? String(payment.payment_id) : null);\nconst topRequired = [\"event_id\", \"event_type\", \"timestamp\", \"source\", \"recovery_attempt_count\"];\nfor (const f of topRequired) { if (!present(b[f]) && b[f] !== 0) errors.push(\"Missing field: \" + f); }\nif (!paymentId) errors.push(\"Missing field: payment_id\");\nif (!b.payment || typeof b.payment !== \"object\" || Array.isArray(b.payment)) errors.push(\"Missing field: payment\");\nif (!b.customer || typeof b.customer !== \"object\" || Array.isArray(b.customer)) errors.push(\"Missing field: customer\");\n\nconst paymentRequired = [\"amount\", \"currency\", \"status\", \"payment_method\", \"failed_at\", \"time_since_failure_hours\"];\nfor (const f of paymentRequired) { if (!present(payment[f]) && payment[f] !== 0) errors.push(\"Missing payment field: \" + f); }\nconst customerRequired = [\"customer_id\", \"notification_count\", \"customer_age_days\", \"previous_successful_payments\", \"previous_failed_payments\", \"previous_recovery_attempts\", \"customer_lifetime_value\", \"average_previous_payment\", \"recent_payment_frequency\"];\nfor (const f of customerRequired) { if (!present(customer[f]) && customer[f] !== 0) errors.push(\"Missing customer field: \" + f); }\n\nconst eventType = typeof b.event_type === \"string\" ? b.event_type.trim().toLowerCase() : String(b.event_type || \"\").toLowerCase();\nif (present(b.event_type) && !ALLOWED_EVENT_TYPES.includes(eventType)) errors.push(\"Invalid event_type: \" + b.event_type);\nconst method = typeof payment.payment_method === \"string\" ? payment.payment_method.trim().toLowerCase() : String(payment.payment_method || \"\").toLowerCase();\nif (present(payment.payment_method) && !ALLOWED_METHODS.includes(method)) errors.push(\"Invalid payment_method: \" + payment.payment_method);\nconst currency = typeof payment.currency === \"string\" ? payment.currency.trim().toUpperCase() : String(payment.currency || \"\").toUpperCase();\nif (present(payment.currency) && (currency.length < 1 || currency.length > 3)) errors.push(\"Invalid currency: \" + payment.currency);\nif (present(b.timestamp) && !isIso(b.timestamp)) errors.push(\"Invalid timestamp (not ISO datetime): \" + b.timestamp);\nif (present(payment.failed_at) && !isIso(payment.failed_at)) errors.push(\"Invalid payment.failed_at (not ISO datetime): \" + payment.failed_at);\nif (present(b.recovery_attempt_count) && !isNum(b.recovery_attempt_count)) errors.push(\"Invalid numeric value: recovery_attempt_count\");\nfor (const f of [\"amount\", \"time_since_failure_hours\"]) { if (present(payment[f]) && !isNum(payment[f])) errors.push(\"Invalid numeric value: payment.\" + f); }\nfor (const f of [\"notification_count\", \"customer_age_days\", \"previous_successful_payments\", \"previous_failed_payments\", \"previous_recovery_attempts\", \"customer_lifetime_value\", \"average_previous_payment\", \"recent_payment_frequency\"]) { if (present(customer[f]) && !isNum(customer[f])) errors.push(\"Invalid numeric value: customer.\" + f); }\n\nconst api_payload = {\n  event_id: present(b.event_id) ? String(b.event_id) : null,\n  event_type: eventType,\n  timestamp: b.timestamp,\n  source: b.source,\n  recovery_attempt_count: num(b.recovery_attempt_count),\n  payment_id: paymentId,\n  payment: {\n    payment_id: paymentId,\n    amount: num(payment.amount),\n    currency,\n    status: payment.status,\n    payment_method: method,\n    failure_reason: present(payment.failure_reason) ? String(payment.failure_reason) : null,\n    failed_at: payment.failed_at,\n    time_since_failure_hours: num(payment.time_since_failure_hours)\n  },\n  customer: {\n    customer_id: customer.customer_id,\n    notification_count: num(customer.notification_count),\n    customer_age_days: num(customer.customer_age_days),\n    previous_successful_payments: num(customer.previous_successful_payments),\n    previous_failed_payments: num(customer.previous_failed_payments),\n    previous_recovery_attempts: num(customer.previous_recovery_attempts),\n    customer_lifetime_value: num(customer.customer_lifetime_value),\n    average_previous_payment: num(customer.average_previous_payment),\n    recent_payment_frequency: num(customer.recent_payment_frequency)\n  }\n};\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    error_message: errors.length ? errors.join(\"; \") : null,\n    event_id: present(b.event_id) ? String(b.event_id) : null,\n    payment_id: paymentId,\n    api_payload ,\n\n   RECLAIM_WORKFLOW_SECRET: \"={{ $vars.RECLAIM_WORKFLOW_SECRET }}\"\n  }\n}];"
       },
-      "id": "03e102b9-e41b-4260-896f-6c514af0dfd6",
+      "id": "166f8c5e-e349-45ca-bc7f-5e1106107b28",
       "name": "Prepare Recovery Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -8752,
-        2928
+        -14256,
+        6016
       ]
     },
     {
@@ -55,13 +55,13 @@
         },
         "options": {}
       },
-      "id": "d062bc11-e498-4882-9280-7e4d667187a4",
+      "id": "135427a8-3b5f-4402-89e1-34f9d90a73b5",
       "name": "Validate Recovery Event",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -8480,
-        2928
+        -13984,
+        6032
       ]
     },
     {
@@ -90,13 +90,13 @@
           "timeout": 20000
         }
       },
-      "id": "163104eb-6993-4e03-87f5-b1b6dd589dde",
+      "id": "7268986c-0724-4478-92c3-5a242f848d43",
       "name": "Reclaim Recovery Evaluation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -8224,
-        2832
+        -13728,
+        5936
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -110,13 +110,13 @@
       "parameters": {
         "jsCode": "const items = $input.all();\n\nfunction errorOut(message, paymentId, eventId, backendResponse) {\n  return [{\n    json: {\n      ok: false,\n      action: \"ERROR\",\n      decision_action: null,\n      valid_action: false,\n      error_message: message,\n      status: \"error\",\n      payment_id: paymentId != null ? paymentId : null,\n      event_id: eventId != null ? eventId : null,\n      backend_response: backendResponse != null ? backendResponse : null\n    }\n  }];\n}\n\nfunction unwrap(value) {\n  if (value == null) return null;\n  if (typeof value === \"string\") return value;\n  if (typeof value !== \"object\") return null;\n  if (Array.isArray(value)) return null;\n  if (Object.prototype.hasOwnProperty.call(value, \"action\") && typeof value.action !== \"undefined\") return value.action;\n  if (Object.prototype.hasOwnProperty.call(value, \"body\")) return unwrap(value.body);\n  if (Object.prototype.hasOwnProperty.call(value, \"data\")) return unwrap(value.data);\n  if (Object.prototype.hasOwnProperty.call(value, \"decision\")) return unwrap(value.decision);\n  if (Object.prototype.hasOwnProperty.call(value, \"result\")) return unwrap(value.result);\n  return null;\n}\n\nif (!items.length) {\n  return errorOut(\"Reclaim returned no response.\", null, null, null);\n}\n\nlet data = items[0].json;\nif (data && data.error) {\n  const err = data.error;\n  const httpCode = err.httpCode || (err.context && err.context.httpCode) || null;\n  const msg = err.message || err.description || String(err);\n  const prefix = String(httpCode) === \"422\" ? \"Reclaim API validation failed: \" : \"Reclaim API request failed: \";\n  return errorOut(prefix + msg, null, null, { error: err });\n}\nif (typeof data === \"string\") {\n  try { data = JSON.parse(data); } catch (e) {\n    return errorOut(\"Reclaim returned invalid JSON.\", null, null, null);\n  }\n}\nif (!data || typeof data !== \"object\") {\n  return errorOut(\"Reclaim returned an empty response.\", null, null, null);\n}\n\nconst paymentId = data.payment_id != null ? data.payment_id\n  : (data.payment && data.payment.payment_id != null ? data.payment.payment_id\n  : (data.decision && data.decision.payment_id != null ? data.decision.payment_id : null));\nconst eventId = data.event_id != null ? data.event_id\n  : (data.decision && data.decision.event_id != null ? data.decision.event_id : null);\n\nconst allowed = [\"RETRY\", \"PAYMENT_LINK\", \"REMINDER\", \"ESCALATE\", \"STOP\"];\nlet apiAction = unwrap(data);\nif (typeof apiAction === \"string\") apiAction = apiAction.trim().toUpperCase();\nif (!apiAction) {\n  return errorOut(\"Recovery action missing from Reclaim response.\", paymentId, eventId, data);\n}\nif (!allowed.includes(apiAction)) {\n  return errorOut(\"Unsupported recovery action: \" + apiAction, paymentId, eventId, data);\n}\n\nreturn [{\n  json: {\n    ok: true,\n    action: apiAction,\n    decision_action: apiAction,\n    valid_action: true,\n    status: \"success\",\n    payment_id: paymentId,\n    event_id: eventId,\n    backend_response: data,\n    error_message: null,\n    message: \"Validated recovery action: \" + apiAction + \".\"\n  }\n}];"
       },
-      "id": "f83e9042-0f07-4937-aa18-7fbd31159ddf",
+      "id": "423c2b62-05d8-429b-a381-598216fd0ca4",
       "name": "Normalize Evaluation Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -7984,
-        2848
+        -13488,
+        5952
       ]
     },
     {
@@ -234,13 +234,13 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "bde035e7-aeb6-45cc-9fa3-37bd564bf010",
+      "id": "d7cf92c1-75fd-4304-8321-1900efb739d6",
       "name": "Route Validated Decision",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -7776,
-        2832
+        -13280,
+        5936
       ]
     },
     {
@@ -281,13 +281,13 @@
         },
         "options": {}
       },
-      "id": "6c0326c3-4644-4b9b-baec-9b5f0514755d",
+      "id": "735d63c6-5ec9-4888-a944-836e94c63ac7",
       "name": "RETRY Dry Run",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -7488,
-        2624
+        -12992,
+        5728
       ]
     },
     {
@@ -328,13 +328,13 @@
         },
         "options": {}
       },
-      "id": "4ef3a185-23ed-4a1c-8a2c-7923a737a309",
+      "id": "368eaf1f-3ff9-42fd-b280-433e180ab34a",
       "name": "PAYMENT_LINK Dry Run",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -7488,
-        2768
+        -12992,
+        5872
       ]
     },
     {
@@ -375,13 +375,13 @@
         },
         "options": {}
       },
-      "id": "329559e0-c247-4f3d-87b7-b1da03b20f8d",
+      "id": "69155d9e-ba71-428f-815d-37dc77461c6a",
       "name": "REMINDER Dry Run",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -7488,
-        2896
+        -12992,
+        6000
       ]
     },
     {
@@ -422,13 +422,13 @@
         },
         "options": {}
       },
-      "id": "4db82237-00e3-40d6-84af-004bbc139859",
+      "id": "ee585f72-2350-4808-a46c-0ba3f41f577b",
       "name": "ESCALATE Dry Run",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -7488,
-        3024
+        -12992,
+        6128
       ]
     },
     {
@@ -469,13 +469,13 @@
         },
         "options": {}
       },
-      "id": "32dd0b44-2859-4930-afe4-c884ca5c9b27",
+      "id": "f94a696b-c190-4b98-8ad2-1fab19f414a2",
       "name": "STOP Result",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -7488,
-        3152
+        -12992,
+        6256
       ]
     },
     {
@@ -516,13 +516,13 @@
         },
         "options": {}
       },
-      "id": "3e161dc6-1cfe-428d-b0c7-159aa8edb7f5",
+      "id": "336fda80-b8e2-48a7-af76-e31f94246e9f",
       "name": "Error Result",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -7488,
-        3312
+        -12992,
+        6416
       ]
     },
     {
@@ -563,13 +563,13 @@
         },
         "options": {}
       },
-      "id": "c6b82f82-84f4-4c80-b2fa-32cb998f68bb",
+      "id": "aabe3ea5-2dc9-41d3-b157-79f4581b6f5a",
       "name": "Invalid Event Response",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -8032,
-        3072
+        -13536,
+        6176
       ]
     }
   ],

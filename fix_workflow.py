@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Fix the workflow
 workflow_path = Path('workflows/reclaim-recovery-orchestration.json')
-workflow = json.loads(workflow_path.read_text(encoding='utf-8'))
+workflow = json.loads(workflow_path.read_text(encoding='utf-8-sig'))
 
 # Find and fix the HTTP node
 for node in workflow['nodes']:
@@ -15,6 +15,15 @@ for node in workflow['nodes']:
             if param['name'] == 'X-Reclaim-Workflow-Secret':
                 param['value'] = '={{ $vars.RECLAIM_WORKFLOW_SECRET }}'
         print('✓ Fixed HTTP node URL and secret')
+        break
+
+for node in workflow['nodes']:
+    if node.get('name') == 'Prepare Recovery Payload' and node.get('type') == 'n8n-nodes-base.code':
+        node['parameters']['jsCode'] = node['parameters']['jsCode'].replace(
+            'RECLAIM_WORKFLOW_SECRET: "reclaim-demo-secret-2026"',
+            'RECLAIM_WORKFLOW_SECRET: "={{ $vars.RECLAIM_WORKFLOW_SECRET }}"',
+        )
+        print('✓ Removed literal workflow secret from payload preparation')
         break
 
 # Write back

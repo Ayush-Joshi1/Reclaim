@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -14,6 +15,7 @@ from app.schemas import (
     RecoveryHistory,
 )
 from app.services.decision_validator import DecisionValidator
+from app.services.llm_client import LLMClientError, OpenAICompatibleLLMClient
 from app.services.recovery_context import build_recovery_context
 from app.services.recovery_decision import RecoveryDecisionService
 from app.services.revenue_risk import RevenueRiskEngine
@@ -30,6 +32,13 @@ class StaticLLMClient:
 
     def generate_recovery_decision(self, context: Any) -> dict[str, Any]:
         return self._response
+
+
+class FailingLLMClient:
+    """Fake provider that simulates an unavailable model."""
+
+    def generate_recovery_decision(self, context: Any) -> dict[str, Any]:
+        raise RuntimeError("LLM unavailable")
 
 
 def _context(
@@ -150,11 +159,174 @@ def test_successful_payment_is_forced_to_stop() -> None:
     assert any("successful" in note.lower() for note in result.validation_notes)
 
 
-def test_malformed_llm_output_returns_safe_failure_result() -> None:
-    service = RecoveryDecisionService(StaticLLMClient({"action": "UNSAFE"}))
+def test_valid_llm_recommendation_is_preserved() -> None:
+    context = _context()
+    service = RecoveryDecisionService(
+        StaticLLMClient(
+            {
+                "action": "RETRY",
+                "diagnosis": "The failure appears transient and within policy.",
+                "reasoning": "The payment is recoverable and the cause is a short-lived transient issue.",
+                "confidence": 0.82,
+                "requires_approval": False,
+                "priority": context.risk.urgency,
+                "policy_constraints": [],
+                "expected_outcome": "A retry should be attempted under the policy rules.",
+            }
+        )
+    )
+
+    result = service.decide(context)
+
+    assert result.action == "RETRY"
+    assert result.validation_status == "VALID"
+
+
+def test_invalid_llm_action_is_rejected() -> None:
+    service = RecoveryDecisionService(
+        StaticLLMClient(
+            {
+                "action": "REFUND",
+                "diagnosis": "This is not an allowed action.",
+                "reasoning": "The model produced an unsupported recovery action.",
+                "confidence": 0.5,
+                "requires_approval": False,
+                "priority": "MEDIUM",
+                "policy_constraints": [],
+                "expected_outcome": "Reject the unsupported action.",
+            }
+        )
+    )
+
+    result = service.decide(_context())
+
+    assert result.action == "ESCALATE"
+    assert result.validation_status == "FAILED"
+
+
+def test_malformed_llm_response_returns_safe_failure_result() -> None:
+    service = RecoveryDecisionService(StaticLLMClient(["not", "a", "decision"]))
 
     result = service.decide(_context())
 
     assert result.action == "ESCALATE"
     assert result.validation_status == "FAILED"
     assert result.requires_approval is True
+
+
+def test_llm_unavailable_returns_safe_failure_result() -> None:
+    service = RecoveryDecisionService(FailingLLMClient())
+
+    result = service.decide(_context())
+
+    assert result.action == "ESCALATE"
+    assert result.validation_status == "FAILED"
+
+
+def test_policy_overrides_unsafe_llm_recommendation() -> None:
+    context = _context(payment_overrides={"time_since_failure_hours": 49, "failed_at": NOW - timedelta(hours=49)})
+    service = RecoveryDecisionService(
+        StaticLLMClient(
+            {
+                "action": "RETRY",
+                "diagnosis": "The model wants to retry despite the age.",
+                "reasoning": "A retry should still be attempted because the model prefers retention.",
+                "confidence": 0.9,
+                "requires_approval": False,
+                "priority": "HIGH",
+                "policy_constraints": [],
+                "expected_outcome": "Recovery should proceed even though the window is expired.",
+            }
+        )
+    )
+
+    result = service.decide(context)
+
+    assert result.action == "STOP"
+    assert result.validation_status == "OVERRIDDEN"
+    assert any("Recovery window" in note for note in result.validation_notes)
+
+
+def test_gemini_structured_response_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+
+    class DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": '{"action": "RETRY", "diagnosis": "Transient failure", "reasoning": "Retry is appropriate.", "confidence": 0.8, "requires_approval": false, "priority": "HIGH", "policy_constraints": [], "expected_outcome": "Retry the payment."}'
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: DummyResponse())
+
+    result = client.generate_recovery_decision(_context())
+
+    assert result["action"] == "RETRY"
+    assert result["confidence"] == 0.8
+
+
+def test_gemini_malformed_response_raises_llm_client_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+
+    class DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "not-json"}]
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: DummyResponse())
+
+    with pytest.raises(LLMClientError):
+        client.generate_recovery_decision(_context())
+
+
+def test_http_failure_returns_llm_client_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OpenAICompatibleLLMClient(
+        api_key="bad-key",
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+
+    def mock_post(*args: Any, **kwargs: Any) -> Any:
+        raise httpx.HTTPStatusError("bad request", request=None, response=None)
+
+    monkeypatch.setattr(httpx, "post", mock_post)
+
+    with pytest.raises(LLMClientError):
+        client.generate_recovery_decision(_context())
+
+
+@pytest.mark.parametrize("action", ["RETRY", "PAYMENT_LINK", "REMINDER", "ESCALATE", "STOP"])
+def test_supported_actions_remain_accepted_by_validation(action: str) -> None:
+    result = DecisionValidator().validate(_decision(action), _context())
+
+    assert result.action == action

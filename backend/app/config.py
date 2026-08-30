@@ -24,6 +24,9 @@ class Settings:
     razorpay_test_mode: bool = False
     razorpay_webhook_secret: str = ""
     reclaim_workflow_secret: str = ""
+    recovery_llm_api_key: str = ""
+    recovery_llm_model: str = ""
+    recovery_llm_base_url: str = "https://api.openai.com/v1"
     reconciliation_max_attempts: int = 3
     follow_up_lease_seconds: int = 300
 
@@ -44,6 +47,9 @@ class Settings:
             razorpay_test_mode=os.getenv("RAZORPAY_TEST_MODE", "false").lower() == "true",
             razorpay_webhook_secret=os.getenv("RAZORPAY_WEBHOOK_SECRET", ""),
             reclaim_workflow_secret=os.getenv("RECLAIM_WORKFLOW_SECRET", ""),
+            recovery_llm_api_key=os.getenv("RECOVERY_LLM_API_KEY", ""),
+            recovery_llm_model=os.getenv("RECOVERY_LLM_MODEL", ""),
+            recovery_llm_base_url=os.getenv("RECOVERY_LLM_BASE_URL", "https://api.openai.com/v1"),
             reconciliation_max_attempts=int(os.getenv("RECONCILIATION_MAX_ATTEMPTS", "3")),
             follow_up_lease_seconds=int(os.getenv("FOLLOW_UP_LEASE_SECONDS", "300")),
         )

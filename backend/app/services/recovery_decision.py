@@ -21,7 +21,7 @@ class RecoveryDecisionService:
         try:
             raw_decision: dict[str, Any] = self._llm_client.generate_recovery_decision(context)
             candidate = RecoveryDecision.model_validate(raw_decision)
-        except (LLMClientError, ValidationError, TypeError, ValueError) as error:
+        except (LLMClientError, ValidationError, TypeError, ValueError, RuntimeError, OSError) as error:
             return self._validator.safe_failure(context, error.__class__.__name__)
 
         return self._validator.validate(candidate, context)

@@ -30,22 +30,31 @@ class OpenAICompatibleLLMClient:
         self._api_key = api_key
         self._model = model
         self._base_url = base_url.rstrip("/")
+        self._uses_google_gemini = "generativelanguage.googleapis.com" in self._base_url.lower()
 
     @classmethod
     def from_environment(cls) -> "OpenAICompatibleLLMClient":
         """Create a live client only when all required configuration is present."""
         api_key = os.getenv("RECOVERY_LLM_API_KEY")
         model = os.getenv("RECOVERY_LLM_MODEL")
-        base_url = os.getenv("RECOVERY_LLM_BASE_URL", "https://api.openai.com/v1")
+        base_url = os.getenv(
+            "RECOVERY_LLM_BASE_URL",
+            "https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
         if not api_key or not model:
             raise LLMClientError(
                 "RECOVERY_LLM_API_KEY and RECOVERY_LLM_MODEL are required for a live LLM call."
             )
         return cls(api_key=api_key, model=model, base_url=base_url)
 
-    def generate_recovery_decision(self, context: RecoveryContext) -> dict[str, Any]:
-        """Request structured JSON without exposing provider credentials in errors."""
-        payload = {
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
+        }
+
+    def _build_payload(self, context: RecoveryContext) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "model": self._model,
             "messages": [
                 {"role": "system", "content": load_system_prompt()},
@@ -54,19 +63,63 @@ class OpenAICompatibleLLMClient:
                     "content": json.dumps(context.model_dump(mode="json")),
                 },
             ],
-            "response_format": {"type": "json_object"},
             "temperature": 0,
         }
+        if not self._uses_google_gemini:
+            payload["response_format"] = {"type": "json_object"}
+        return payload
+
+    @staticmethod
+    def _extract_content(payload: dict[str, Any]) -> str:
+        choices = payload.get("choices")
+        if isinstance(choices, list) and choices:
+            first_choice = choices[0]
+            if isinstance(first_choice, dict):
+                message = first_choice.get("message")
+                if isinstance(message, dict):
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        return content
+                    if isinstance(content, list):
+                        text_parts: list[str] = []
+                        for item in content:
+                            if isinstance(item, dict):
+                                text = item.get("text")
+                                if isinstance(text, str):
+                                    text_parts.append(text)
+                        if text_parts:
+                            return "".join(text_parts)
+
+        candidates = payload.get("candidates")
+        if isinstance(candidates, list) and candidates:
+            first_candidate = candidates[0]
+            if isinstance(first_candidate, dict):
+                content = first_candidate.get("content")
+                if isinstance(content, dict):
+                    parts = content.get("parts")
+                    if isinstance(parts, list):
+                        text_parts: list[str] = []
+                        for item in parts:
+                            if isinstance(item, dict):
+                                text = item.get("text")
+                                if isinstance(text, str):
+                                    text_parts.append(text)
+                        if text_parts:
+                            return "".join(text_parts)
+
+        raise LLMClientError("The configured LLM did not return a usable structured decision.")
+
+    def generate_recovery_decision(self, context: RecoveryContext) -> dict[str, Any]:
+        """Request structured JSON without exposing provider credentials in errors."""
         try:
             response = httpx.post(
                 f"{self._base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                json=payload,
+                headers=self._headers(),
+                json=self._build_payload(context),
                 timeout=20.0,
             )
             response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-            parsed = json.loads(content)
+            parsed = json.loads(self._extract_content(response.json()))
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             raise LLMClientError("The configured LLM did not return a usable structured decision.") from error
 
