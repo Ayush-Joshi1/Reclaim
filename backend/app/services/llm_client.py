@@ -120,6 +120,17 @@ class OpenAICompatibleLLMClient:
             )
             response.raise_for_status()
             parsed = json.loads(self._extract_content(response.json()))
+        except httpx.HTTPStatusError as error:
+            if error.response is None:
+                raise LLMClientError(
+                    "The configured LLM did not return a usable structured decision."
+                ) from error
+            response_body = error.response.text[:500]
+            if self._api_key:
+                response_body = response_body.replace(self._api_key, "[REDACTED]")
+            raise LLMClientError(
+                f"LLM provider returned HTTP {error.response.status_code}: {response_body}"
+            ) from error
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             raise LLMClientError("The configured LLM did not return a usable structured decision.") from error
 
