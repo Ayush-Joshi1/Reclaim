@@ -81,6 +81,15 @@ class OpenAICompatibleLLMClient:
         return response_body[:500]
 
     @staticmethod
+    def _parse_json_content(content: str) -> Any:
+        lines = content.strip().splitlines()
+        if len(lines) >= 2 and lines[0].strip().startswith("```") and lines[-1].strip() == "```":
+            opening_fence = lines[0].strip()
+            if opening_fence in {"```", "```json"}:
+                content = "\n".join(lines[1:-1]).strip()
+        return json.loads(content)
+
+    @staticmethod
     def _extract_content(payload: dict[str, Any]) -> str:
         choices = payload.get("choices")
         if isinstance(choices, list) and choices:
@@ -131,7 +140,7 @@ class OpenAICompatibleLLMClient:
                 timeout=20.0,
             )
             response.raise_for_status()
-            parsed = json.loads(self._extract_content(response.json()))
+            parsed = self._parse_json_content(self._extract_content(response.json()))
         except httpx.HTTPStatusError as error:
             if error.response is None:
                 raise LLMClientError(
