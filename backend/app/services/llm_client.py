@@ -69,6 +69,17 @@ class OpenAICompatibleLLMClient:
             payload["response_format"] = {"type": "json_object"}
         return payload
 
+    def _safe_response_body(self, response: httpx.Response) -> str:
+        response_body = getattr(response, "text", None)
+        if not isinstance(response_body, str):
+            try:
+                response_body = json.dumps(response.json())
+            except (AttributeError, TypeError, ValueError):
+                response_body = "[response body unavailable]"
+        if self._api_key:
+            response_body = response_body.replace(self._api_key, "[REDACTED]")
+        return response_body[:500]
+
     @staticmethod
     def _extract_content(payload: dict[str, Any]) -> str:
         choices = payload.get("choices")
@@ -111,6 +122,7 @@ class OpenAICompatibleLLMClient:
 
     def generate_recovery_decision(self, context: RecoveryContext) -> dict[str, Any]:
         """Request structured JSON without exposing provider credentials in errors."""
+        response: Any = None
         try:
             response = httpx.post(
                 f"{self._base_url}/chat/completions",
@@ -125,14 +137,26 @@ class OpenAICompatibleLLMClient:
                 raise LLMClientError(
                     "The configured LLM did not return a usable structured decision."
                 ) from error
-            response_body = error.response.text[:500]
-            if self._api_key:
-                response_body = response_body.replace(self._api_key, "[REDACTED]")
             raise LLMClientError(
-                f"LLM provider returned HTTP {error.response.status_code}: {response_body}"
+                f"LLM provider returned HTTP {getattr(error.response, 'status_code', 'unknown')}: "
+                f"{self._safe_response_body(error.response)}"
+            ) from error
+        except LLMClientError as error:
+            raise LLMClientError(
+                f"LLM provider returned HTTP {getattr(response, 'status_code', 'unknown')} "
+                f"with an unusable response: "
+                f"{self._safe_response_body(response)}"
             ) from error
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
-            raise LLMClientError("The configured LLM did not return a usable structured decision.") from error
+            if response is None:
+                raise LLMClientError(
+                    "The configured LLM did not return a usable structured decision."
+                ) from error
+            raise LLMClientError(
+                f"LLM provider returned HTTP {getattr(response, 'status_code', 'unknown')} "
+                f"with an unusable response: "
+                f"{self._safe_response_body(response)}"
+            ) from error
 
         if not isinstance(parsed, dict):
             raise LLMClientError("The configured LLM returned a non-object decision.")
