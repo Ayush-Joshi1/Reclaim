@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -18,7 +19,7 @@ from app.schemas import CustomerRiskContext, PaymentRiskInput, RecoveryEvent
 from app.schemas.razorpay import RazorpayPaymentLink
 from app.services.action_executor import RazorpayActionExecutor
 from app.services.recovery_workflow import RecoveryWorkflowService, workflow_service
-from app.services.razorpay_client import RazorpayNotFoundError
+from app.services.razorpay_client import RazorpayClient, RazorpayNotFoundError
 
 SECRET = "workflow-test-secret"
 NOW = datetime(2026, 8, 26, tzinfo=UTC)
@@ -295,6 +296,103 @@ def test_provider_executor_is_used_for_payment_link_when_enabled(
     assert result.result.provider_called is True
     assert calls == [(125_000, "INR", "pay_workflow_test", "Recovery payment for pay_workflow_test")]
     assert "https://rzp.io/i/live123" in result.result.message
+
+
+def test_route_executes_real_razorpay_client_for_payment_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payment_id = "pay-route-provider-001"
+    event_id = "evt-route-provider-001"
+    captured: dict[str, Any] = {}
+
+    def provider_handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["authorization"] = request.headers.get("authorization")
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "id": "plink_route_test_001",
+                "amount": 125_000,
+                "currency": "INR",
+                "status": "created",
+                "short_url": "https://rzp.io/i/route-test-001",
+                "reference_id": payment_id,
+            },
+        )
+
+    configured = Settings(
+        database_url="postgresql://test",
+        reclaim_workflow_secret=SECRET,
+        razorpay_key_id="test-key-id",
+        razorpay_key_secret="test-key-secret",
+        razorpay_actions_enabled=True,
+        razorpay_test_mode=True,
+    )
+    monkeypatch.setattr(config, "settings", configured)
+    razorpay_client = RazorpayClient(
+        key_id="test-key-id",
+        key_secret="test-key-secret",
+        transport=httpx.MockTransport(provider_handler),
+    )
+    monkeypatch.setattr(
+        workflow_service,
+        "_action_executor",
+        RazorpayActionExecutor(razorpay_client, enabled=True),
+    )
+
+    response = TestClient(app).post(
+        "/api/workflows/recovery",
+        headers={"X-Reclaim-Workflow-Secret": SECRET},
+        json=event_data(
+            event_id=event_id,
+            payment_id=payment_id,
+            payment=payment_data(
+                payment_id=payment_id,
+                amount=125_000,
+                failure_reason="card_declined",
+            ),
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["duplicate"] is False
+    assert body["action"] == "PAYMENT_LINK"
+    assert body["validation_status"] == "VALID"
+    assert body["result"]["mode"] == "dry_run"
+    assert body["result"]["execution_mode"] == "provider"
+    assert body["result"]["provider_called"] is True
+    assert body["result"]["execution_succeeded"] is True
+    assert body["result"]["event_id"] == event_id
+    assert body["result"]["payment_id"] == payment_id
+    assert "https://rzp.io/i/route-test-001" in body["result"]["message"]
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/v1/payment_links/"
+    assert captured["authorization"].startswith("Basic ")
+    assert captured["payload"] == {
+        "amount": 125_000,
+        "currency": "INR",
+        "reference_id": payment_id,
+        "description": f"Recovery payment for {payment_id}",
+        "customer": {"name": "Reclaim customer"},
+        "notify": {"sms": False, "email": False},
+        "reminder_enable": False,
+    }
+
+    with SessionLocal() as session:
+        attempt = session.scalar(
+            select(RecoveryAttempt).where(RecoveryAttempt.event_id == event_id)
+        )
+        assert attempt is not None
+        assert attempt.action == "PAYMENT_LINK"
+        assert attempt.payment.razorpay_payment_id == payment_id
+        assert attempt.provider_called is True
+        assert attempt.execution_succeeded is True
+        assert attempt.execution_mode == "provider"
+        assert attempt.provider_payment_link_id == "plink_route_test_001"
+        assert attempt.provider_reference_id == payment_id
 
 
 def test_internal_failure_is_safe(monkeypatch: pytest.MonkeyPatch) -> None:
