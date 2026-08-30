@@ -127,6 +127,9 @@ class RecoveryWorkflowService:
         """Commit one audit record, relying on the database for cross-process uniqueness."""
         create_tables()
         session = self._session_factory()
+        eligibility_reason = " ".join(response.decision.validation_notes)
+        if len(eligibility_reason) > 1000:
+            eligibility_reason = eligibility_reason[:997] + "..."
         try:
             existing = session.scalar(
                 select(RecoveryAttempt).where(RecoveryAttempt.event_id == event_id)
@@ -172,7 +175,7 @@ class RecoveryWorkflowService:
                 risk_score=response.decision.risk_score,
                 risk_level=response.decision.priority,
                 eligibility_result=response.decision.recovery_eligible,
-                eligibility_reason=" ".join(response.decision.validation_notes),
+                eligibility_reason=eligibility_reason,
                 decision_confidence=response.decision.confidence,
                 approval_required=response.decision.requires_approval,
                 validation_status=response.decision.validation_status,

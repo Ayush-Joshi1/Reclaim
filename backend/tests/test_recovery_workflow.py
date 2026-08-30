@@ -115,6 +115,37 @@ def test_validated_decision_lineage_is_persisted() -> None:
         assert attempt.policy_constraints
 
 
+def test_failed_llm_diagnosis_is_persisted_concisely(monkeypatch: pytest.MonkeyPatch) -> None:
+    event = event_data(event_id="evt-failed-diagnosis-persisted")
+    failing_client = type(
+        "FailingLLMClient",
+        (),
+        {"generate_recovery_decision": lambda self, context: {"invalid": "decision"}},
+    )()
+    monkeypatch.setattr(workflow_service, "_llm_client", failing_client)
+
+    response = TestClient(app).post(
+        "/api/workflows/recovery",
+        headers={"X-Reclaim-Workflow-Secret": SECRET},
+        json=event,
+    )
+
+    assert response.status_code == 200
+    with SessionLocal() as session:
+        attempt = session.scalar(
+            select(RecoveryAttempt).where(
+                RecoveryAttempt.event_id == "evt-failed-diagnosis-persisted"
+            )
+        )
+        assert attempt is not None
+        assert attempt.validation_status == "FAILED"
+        assert attempt.decision_diagnosis == "AI recovery recommendation could not be validated."
+        assert len(attempt.decision_diagnosis) <= 400
+        assert attempt.eligibility_reason
+        assert len(attempt.eligibility_reason) <= 1000
+        assert "LLM decision failed validation" in attempt.eligibility_reason
+
+
 def test_missing_and_invalid_authentication_are_rejected() -> None:
     client = TestClient(app)
     payload = event_data()
