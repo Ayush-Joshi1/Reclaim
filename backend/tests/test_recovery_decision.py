@@ -281,6 +281,45 @@ def test_gemini_structured_response_is_parsed(monkeypatch: pytest.MonkeyPatch) -
     assert result["confidence"] == 0.8
 
 
+def test_gemini_request_uses_bearer_auth_without_logging_key(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    api_key = "gemini-test-key"
+    client = OpenAICompatibleLLMClient(
+        api_key=api_key,
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+    captured_headers: dict[str, str] = {}
+
+    class DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"action": "RETRY", "diagnosis": "Transient failure", "reasoning": "Retry is appropriate.", "confidence": 0.8, "requires_approval": false, "priority": "HIGH", "policy_constraints": [], "expected_outcome": "Retry the payment."}'
+                        }
+                    }
+                ]
+            }
+
+    def mock_post(*args: Any, **kwargs: Any) -> DummyResponse:
+        captured_headers.update(kwargs["headers"])
+        return DummyResponse()
+
+    monkeypatch.setattr(httpx, "post", mock_post)
+
+    client.generate_recovery_decision(_context())
+
+    assert captured_headers["Authorization"] == f"Bearer {api_key}"
+    assert "x-goog-api-key" not in captured_headers
+    assert api_key not in caplog.text
+
+
 def test_gemini_malformed_response_raises_llm_client_error(monkeypatch: pytest.MonkeyPatch) -> None:
     client = OpenAICompatibleLLMClient(
         api_key="test-key",
