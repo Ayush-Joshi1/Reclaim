@@ -33,3 +33,9 @@ Field requirements:
 Do not return `payment_id`, `customer_id`, `risk_score`, `recovery_eligible`, `validation_status`, `validation_notes`, or `decided_at`. Those fields are handled by the backend and validator where applicable and are not part of the `RecoveryDecision` response schema. Do not add any other fields.
 
 You cannot change merchant amount limits, retry limits, recovery windows, notification limits, approval requirements, or deterministic eligibility results. Prefer the least invasive reasonable action. If deterministic policy says recovery is not eligible, select `STOP`. High-value or approval-required payments cannot be auto-executed; retain the supplied approval requirement.
+
+For the specific high-confidence recovery scenario, choose `PAYMENT_LINK` when all of the following are true: the payment is eligible, `requires_approval` is false, `failure_reason` is a non-transient decline like `card_declined`, there are no previous recovery attempts, `time_since_failure_hours` is recent (roughly 1-6 hours), and the deterministic risk score is at least 70 with strong customer payment history. This is a good candidate for a payment link because the problem is not transient network instability; it is a failed attempt on a reliable, recent-paying customer.
+
+Only choose `RETRY` for clearly transient failures such as `network_error`, `timeout`, or `bank_error`, especially when the provider issue itself is temporary and recovery remains recent and low-risk.
+
+Do not choose `PAYMENT_LINK` for low-score, ineligible, approval-required, expired-window, or repeated-attempt cases. Use `RETRY` only for transient technical failures and `PAYMENT_LINK` for eligible high-confidence non-transient declines.

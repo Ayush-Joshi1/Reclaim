@@ -182,6 +182,56 @@ def test_valid_llm_recommendation_is_preserved() -> None:
     assert result.validation_status == "VALID"
 
 
+def test_high_confidence_card_decline_prefers_payment_link() -> None:
+    payment = PaymentRiskInput(
+        payment_id="payment-link-target",
+        amount=150_000,
+        currency="INR",
+        payment_method="card",
+        status="failed",
+        failure_reason="card_declined",
+        failed_at=NOW - timedelta(hours=2),
+        time_since_failure_hours=2,
+    )
+    customer = CustomerRiskContext(
+        customer_id="customer-link-target",
+        customer_age_days=420,
+        previous_successful_payments=12,
+        previous_failed_payments=0,
+        previous_recovery_attempts=0,
+        customer_lifetime_value=4_000_000,
+        average_previous_payment=240_000,
+        recent_payment_frequency=7,
+    )
+    history = RecoveryHistory(recovery_attempt_count=0)
+    risk = RevenueRiskEngine().evaluate(payment, customer, history, POLICY)
+    assert risk.risk_score >= 70
+    assert risk.recovery_eligible is True
+    assert risk.requires_merchant_approval is False
+
+    context = build_recovery_context(payment, customer, history, risk, POLICY)
+    service = RecoveryDecisionService(
+        StaticLLMClient(
+            {
+                "action": "PAYMENT_LINK",
+                "diagnosis": "The customer is high-confidence and the card decline is non-transient.",
+                "reasoning": "The payment is within policy, eligible for recovery, and a strong recent-paying customer is likely to complete a payment link.",
+                "confidence": 0.9,
+                "requires_approval": False,
+                "priority": context.risk.urgency,
+                "policy_constraints": [],
+                "expected_outcome": "A payment link should be offered to recover the failed payment without additional approval.",
+            }
+        )
+    )
+
+    result = service.decide(context)
+
+    assert result.action == "PAYMENT_LINK"
+    assert result.validation_status == "VALID"
+    assert result.requires_approval is False
+
+
 def test_invalid_llm_action_is_rejected() -> None:
     service = RecoveryDecisionService(
         StaticLLMClient(
