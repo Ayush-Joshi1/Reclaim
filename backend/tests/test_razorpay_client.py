@@ -124,6 +124,43 @@ def test_payment_link_provider_errors_are_mapped(
         client.create_payment_link(125000, "INR", "pay_test_123", "Recovery payment")
 
 
+def test_payment_link_valid_response_with_real_razorpay_extra_fields_is_accepted() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/v1/payment_links/"
+        return httpx.Response(
+            200,
+            json={
+                "id": "plink_test_123",
+                "entity": "payment_link",
+                "amount": 125000,
+                "currency": "INR",
+                "status": "created",
+                "description": "Recovery payment for pay_razorpay_provider_diag_002",
+                "short_url": "https://rzp.io/i/test123",
+                "reference_id": "pay_razorpay_provider_diag_002",
+                "customer": {"name": "Test Customer", "email": "test@example.com"},
+                "created_at": 1720000000,
+                "notify": {"sms": False, "email": False},
+                "reminder_enable": False,
+            },
+        )
+
+    link = _client(httpx.MockTransport(handler)).create_payment_link(
+        amount=125000,
+        currency="INR",
+        reference_id="pay_razorpay_provider_diag_002",
+        description="Recovery payment",
+    )
+
+    assert link.id == "plink_test_123"
+    assert link.amount == 125000
+    assert link.currency == "INR"
+    assert link.status == "created"
+    assert link.short_url == "https://rzp.io/i/test123"
+    assert link.reference_id == "pay_razorpay_provider_diag_002"
+
+
 def test_payment_link_malformed_response_is_rejected() -> None:
     client = _client(httpx.MockTransport(lambda request: httpx.Response(200, json={"id": "plink_test"})))
 

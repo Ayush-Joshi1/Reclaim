@@ -36,7 +36,7 @@ class RazorpayPayment(BaseModel):
 class RazorpayPaymentLink(BaseModel):
     """Safe subset returned after creating a Payment Link."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     id: str
     amount: int = Field(ge=0)
