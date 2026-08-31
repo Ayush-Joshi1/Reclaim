@@ -1,0 +1,21 @@
+﻿{
+  "sample_size": 500,
+  "seed": 42,
+  "business_metrics": {
+    "total_revenue_at_risk": 336501400,
+    "total_recovered": 39931200,
+    "recovery_rate": 11.87,
+    "average_recovered_amount": 212400.0,
+    "successful_recovery_count": 188
+  },
+  "agent_metrics": {
+    "intervention_count": 268,
+    "successful_recovery_count": 188,
+    "escalation_count": 180,
+    "stop_count": 52,
+    "intervention_rate": 53.6,
+    "success_rate": 70.15,
+    "escalation_rate": 36.0,
+    "stop_rate": 10.4
+  }
+}
