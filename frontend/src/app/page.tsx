@@ -117,63 +117,89 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-12 text-slate-900 sm:px-10">
+    <main className="min-h-screen px-6 py-10 text-slate-900 sm:px-10 lg:px-12">
       <section className="mx-auto max-w-7xl">
-        <header className="mb-10">
-          <p className="text-sm font-medium text-slate-500">Revenue recovery dashboard</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Reclaim</h1>
+        <header className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Autonomous payment recovery</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">Reclaim</h1>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+              <StatusPill label="Backend live" tone="neutral" />
+              <StatusPill label="Recovery flow" tone="info" />
+              <StatusPill label="Dry-run by default" tone="warning" />
+            </div>
+          </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-5">
+            {[
+              "Failed payment",
+              "Risk / eligibility",
+              "Recovery decision",
+              "Action execution",
+              "Outcome tracking",
+            ].map((step, index) => (
+              <div key={step} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
+                <span className="text-sm font-medium text-slate-700">{step}</span>
+              </div>
+            ))}
+          </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
-          <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold">Evaluate a payment</h2>
-              <p className="mt-1 text-sm text-slate-500">Run a dry-run recovery decision using backend policy.</p>
+              <h2 className="text-lg font-semibold text-slate-900">Evaluate a payment</h2>
+              <p className="mt-1 text-sm text-slate-500">Run the project’s backend decision flow for a failed payment event.</p>
             </div>
             <div className="space-y-4">
-              <label className="block text-sm font-medium">Payment ID<input required value={form.paymentId} onChange={(event) => updateField("paymentId", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm" /></label>
+              <label className="block text-sm font-medium text-slate-700">Payment ID<input required value={form.paymentId} onChange={(event) => updateField("paymentId", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 font-mono text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium">Amount<input required min="0" type="number" value={form.amount} onChange={(event) => updateField("amount", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" /></label>
-                <label className="block text-sm font-medium">Currency<input required minLength={3} maxLength={3} value={form.currency} onChange={(event) => updateField("currency", event.target.value.toUpperCase())} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm uppercase" /></label>
+                <label className="block text-sm font-medium text-slate-700">Amount<input required min="0" type="number" value={form.amount} onChange={(event) => updateField("amount", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
+                <label className="block text-sm font-medium text-slate-700">Currency<input required minLength={3} maxLength={3} value={form.currency} onChange={(event) => updateField("currency", event.target.value.toUpperCase())} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm uppercase text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium">Payment method<select value={form.paymentMethod} onChange={(event) => updateField("paymentMethod", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="card">Card</option><option value="upi">UPI</option><option value="netbanking">Netbanking</option><option value="wallet">Wallet</option></select></label>
-                <label className="block text-sm font-medium">Attempts<input required min="0" type="number" value={form.recoveryAttemptCount} onChange={(event) => updateField("recoveryAttemptCount", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" /></label>
+                <label className="block text-sm font-medium text-slate-700">Payment method<select value={form.paymentMethod} onChange={(event) => updateField("paymentMethod", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none"><option value="card">Card</option><option value="upi">UPI</option><option value="netbanking">Netbanking</option><option value="wallet">Wallet</option></select></label>
+                <label className="block text-sm font-medium text-slate-700">Attempts<input required min="0" type="number" value={form.recoveryAttemptCount} onChange={(event) => updateField("recoveryAttemptCount", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
               </div>
-              <label className="block text-sm font-medium">Failed at (UTC)<input required type="datetime-local" value={form.failedAt} onChange={(event) => updateField("failedAt", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" /></label>
+              <label className="block text-sm font-medium text-slate-700">Failed at (UTC)<input required type="datetime-local" value={form.failedAt} onChange={(event) => updateField("failedAt", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium">Hours since failure<input required min="0" type="number" value={form.timeSinceFailureHours} onChange={(event) => updateField("timeSinceFailureHours", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" /></label>
-                <label className="block text-sm font-medium">Failure reason<input value={form.failureReason} onChange={(event) => updateField("failureReason", event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" /></label>
+                <label className="block text-sm font-medium text-slate-700">Hours since failure<input required min="0" type="number" value={form.timeSinceFailureHours} onChange={(event) => updateField("timeSinceFailureHours", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
+                <label className="block text-sm font-medium text-slate-700">Failure reason<input value={form.failureReason} onChange={(event) => updateField("failureReason", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
               </div>
             </div>
-            <button disabled={isLoading} type="submit" className="mt-6 w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400">{isLoading ? "Evaluating..." : "Evaluate recovery"}</button>
+            <button disabled={isLoading} type="submit" className="mt-6 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">{isLoading ? "Evaluating..." : "Evaluate recovery"}</button>
           </form>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm" aria-live="polite">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100" aria-live="polite">
             {!result && !error && <div className="flex min-h-64 items-center justify-center text-center text-sm text-slate-500">Submit an event to see the validated recovery decision.</div>}
-            {error && <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"><p className="font-semibold">Evaluation failed</p><p className="mt-1">{error}</p></div>}
+            {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><p className="font-semibold">Evaluation failed</p><p className="mt-1">{error}</p></div>}
             {result && <DecisionResult result={result} />}
           </section>
         </div>
 
-        <section className="mt-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-            <div><p className="text-sm text-slate-500">Merchant summary</p><h2 className="mt-1 text-lg font-semibold">Recovery performance</h2></div>
-            <button type="button" onClick={() => { void loadSummary(); void loadHistory(); }} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700">Refresh data</button>
+            <div>
+              <p className="text-sm text-slate-500">Merchant summary</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">Recovery performance</h2>
+            </div>
+            <button type="button" onClick={() => { void loadSummary(); void loadHistory(); }} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">Refresh data</button>
           </div>
-          {summaryError && <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{summaryError}</div>}
+          {summaryError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{summaryError}</div>}
           {!summaryError && !summary && <p className="py-8 text-center text-sm text-slate-500">Loading merchant KPIs...</p>}
           {summary && (
             <>
               <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <KpiCard label="Revenue at Risk" value={formatCurrency(summary.revenue_at_risk)} helper="Persisted failed-payment totals" />
-                <KpiCard label="Revenue Recovered" value={summary.revenue_recovered == null ? "Unavailable" : formatCurrency(summary.revenue_recovered)} helper={summary.revenue_recovered == null ? "No persisted successful recovery amount" : "Persisted recovered amount"} />
-                <KpiCard label="Recovery Rate" value={summary.recovery_rate == null ? "Unavailable" : `${summary.recovery_rate.toFixed(1)}%`} helper="Persisted recovered outcomes / total evaluations" />
-                <KpiCard label="Payments Analyzed" value={String(summary.payments_analyzed ?? 0)} helper="Unique payments in persisted recovery history" />
-                <KpiCard label="Interventions" value={String(summary.interventions ?? 0)} helper="Persisted recovery attempts" />
-                <KpiCard label="Recovered" value={summary.recovered_count == null ? "Unavailable" : String(summary.recovered_count)} helper={summary.recovered_count == null ? "No persisted successful recovery outcome" : "Persisted successful recoveries"} />
-                <KpiCard label="Escalated" value={String(summary.escalate_count ?? 0)} helper="Escalation actions recorded" />
-                <KpiCard label="Stopped" value={String(summary.stop_count ?? 0)} helper="Stop actions recorded" />
+                <KpiCard label="Revenue at Risk" value={formatCurrency(summary.revenue_at_risk)} helper="Persisted failed-payment totals" tone="slate" />
+                <KpiCard label="Revenue Recovered" value={summary.revenue_recovered == null ? "Unavailable" : formatCurrency(summary.revenue_recovered)} helper={summary.revenue_recovered == null ? "No successful recovery amount recorded" : "Persisted recovered amount"} tone="emerald" />
+                <KpiCard label="Recovery Rate" value={summary.recovery_rate == null ? "Unavailable" : `${summary.recovery_rate.toFixed(1)}%`} helper="Recovered outcomes / total evaluations" tone="amber" />
+                <KpiCard label="Payments Analyzed" value={String(summary.payments_analyzed ?? 0)} helper="Unique payments in persisted history" tone="sky" />
+                <KpiCard label="Interventions" value={String(summary.interventions ?? 0)} helper="Persisted recovery attempts" tone="indigo" />
+                <KpiCard label="Recovered" value={summary.recovered_count == null ? "Unavailable" : String(summary.recovered_count)} helper={summary.recovered_count == null ? "No successful recovery outcome recorded" : "Persisted successful recoveries"} tone="emerald" />
+                <KpiCard label="Escalated" value={String(summary.escalate_count ?? 0)} helper="Escalation actions recorded" tone="violet" />
+                <KpiCard label="Stopped" value={String(summary.stop_count ?? 0)} helper="Stop actions recorded" tone="rose" />
               </div>
               <div className="mt-6 flex flex-wrap gap-2 text-sm text-slate-600">
                 <Badge label="RETRY" value={summary.retry_count} />
@@ -186,24 +212,27 @@ export default function Home() {
           )}
         </section>
 
-        <section className="mt-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-            <div><p className="text-sm text-slate-500">Persisted activity</p><h2 className="mt-1 text-lg font-semibold">Recovery history</h2></div>
+            <div>
+              <p className="text-sm text-slate-500">Persisted activity</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">Recovery history</h2>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
-              <input value={historyFilter} onChange={(event) => setHistoryFilter(event.target.value)} placeholder="Filter by payment ID" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-              <select value={historyLimit} onChange={(event) => setHistoryLimit(Number(event.target.value))} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
+              <input value={historyFilter} onChange={(event) => setHistoryFilter(event.target.value)} placeholder="Filter by payment ID" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" />
+              <select value={historyLimit} onChange={(event) => setHistoryLimit(Number(event.target.value))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none">
                 <option value={5}>5 rows</option>
                 <option value={10}>10 rows</option>
                 <option value={20}>20 rows</option>
               </select>
-              <button type="button" onClick={() => void loadHistory(historyFilter, historyLimit)} disabled={historyLoading} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">{historyLoading ? "Loading..." : "Refresh"}</button>
+              <button type="button" onClick={() => void loadHistory(historyFilter, historyLimit)} disabled={historyLoading} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">{historyLoading ? "Loading..." : "Refresh"}</button>
             </div>
           </div>
-          {historyError && <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{historyError}</div>}
+          {historyError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{historyError}</div>}
           {!historyLoading && !historyError && history.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No persisted recovery activity yet.</p>}
           {!historyLoading && !historyError && history.length > 0 && (
             <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(260px,0.8fr)]">
-              <div className="overflow-x-auto rounded-md border border-slate-200">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full min-w-[980px] text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
@@ -244,7 +273,7 @@ export default function Home() {
                   </tbody>
                 </table>
               </div>
-              <aside className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <aside className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 {selectedHistoryRecord ? <AuditPanel record={selectedHistoryRecord} /> : <p className="text-sm text-slate-500">Select a recovery event to inspect its audit trail.</p>}
               </aside>
             </div>
@@ -255,14 +284,34 @@ export default function Home() {
   );
 }
 
-function KpiCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+function KpiCard({ label, value, helper, tone = "slate" }: { label: string; value: string; helper: string; tone?: "slate" | "emerald" | "amber" | "sky" | "indigo" | "violet" | "rose" }) {
+  const toneClasses: Record<string, string> = {
+    slate: "border-slate-200 bg-slate-50",
+    emerald: "border-emerald-200 bg-emerald-50",
+    amber: "border-amber-200 bg-amber-50",
+    sky: "border-sky-200 bg-sky-50",
+    indigo: "border-indigo-200 bg-indigo-50",
+    violet: "border-violet-200 bg-violet-50",
+    rose: "border-rose-200 bg-rose-50",
+  };
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div className={`rounded-xl border p-4 ${toneClasses[tone]}`}>
       <p className="text-xs font-medium uppercase tracking-[0.08em] text-slate-500">{label}</p>
       <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
       <p className="mt-2 text-xs text-slate-500">{helper}</p>
     </div>
   );
+}
+
+function StatusPill({ label, tone }: { label: string; tone: "neutral" | "info" | "warning" }) {
+  const toneClasses: Record<string, string> = {
+    neutral: "border-slate-200 bg-slate-100 text-slate-700",
+    info: "border-sky-200 bg-sky-100 text-sky-700",
+    warning: "border-amber-200 bg-amber-100 text-amber-700",
+  };
+
+  return <span className={`rounded-full border px-2.5 py-1 ${toneClasses[tone]}`}>{label}</span>;
 }
 
 function Badge({ label, value }: { label: string; value: number }) {
