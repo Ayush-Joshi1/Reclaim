@@ -113,6 +113,7 @@ def test_payment_link_provider_failure_is_safe(decision: ValidatedRecoveryDecisi
     assert result.status == "terminal"
     assert result.mode == "dry_run"
     assert "no further action" in result.message.lower()
+    assert result.message == "Payment Link provider failed; no further action was performed."
 
 
 def test_payment_link_provider_failure_logs_diagnostic_details_without_leaking_secrets(

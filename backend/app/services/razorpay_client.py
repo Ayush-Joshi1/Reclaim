@@ -92,6 +92,24 @@ class RazorpayMalformedResponseError(RazorpayClientError):
     """Razorpay returned a response outside the supported subset."""
 
 
+class _RazorpayResponse(dict[str, Any]):
+    """Dict-like payload that carries sanitized provider metadata through validation."""
+
+    def __init__(
+        self,
+        payload: dict[str, Any],
+        *,
+        status_code: int | None = None,
+        provider_code: str | None = None,
+        response_text: str | None = None,
+    ) -> None:
+        super().__init__(payload)
+        self.status_code = status_code
+        self.provider_code = provider_code
+        self.response_body = payload
+        self.response_text = response_text
+
+
 class RazorpayClient:
     """Small synchronous Razorpay adapter with explicit request timeouts."""
 
@@ -156,7 +174,13 @@ class RazorpayClient:
         try:
             return RazorpayPaymentLink.model_validate(payload)
         except (TypeError, ValueError) as error:
-            raise RazorpayMalformedResponseError("Razorpay returned an invalid Payment Link.") from error
+            raise RazorpayMalformedResponseError(
+                "Razorpay returned an invalid Payment Link.",
+                status_code=getattr(payload, "status_code", None),
+                provider_code=getattr(payload, "provider_code", None),
+                response_body=getattr(payload, "response_body", payload),
+                response_text=getattr(payload, "response_text", None),
+            ) from error
 
     @staticmethod
     def _provider_error_details(payload: Any) -> tuple[str | None, str | None]:
@@ -198,6 +222,12 @@ class RazorpayClient:
             raise RazorpayMalformedResponseError("Razorpay returned invalid JSON.") from error
 
         provider_code, _ = self._provider_error_details(payload)
+        payload = _RazorpayResponse(
+            payload,
+            status_code=response.status_code,
+            provider_code=provider_code,
+            response_text=response.text,
+        )
         if response.status_code == 401:
             raise RazorpayAuthenticationError(
                 "Razorpay authentication failed.",
@@ -241,7 +271,13 @@ class RazorpayClient:
                 response_body=payload,
             )
         if not isinstance(payload, dict):
-            raise RazorpayMalformedResponseError("Razorpay returned an invalid object.")
+            raise RazorpayMalformedResponseError(
+                "Razorpay returned an invalid object.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+                response_text=response.text,
+            )
         return payload
 
     @staticmethod

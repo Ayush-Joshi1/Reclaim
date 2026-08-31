@@ -127,8 +127,46 @@ def test_payment_link_provider_errors_are_mapped(
 def test_payment_link_malformed_response_is_rejected() -> None:
     client = _client(httpx.MockTransport(lambda request: httpx.Response(200, json={"id": "plink_test"})))
 
-    with pytest.raises(RazorpayMalformedResponseError):
+    with pytest.raises(RazorpayMalformedResponseError) as raised:
         client.create_payment_link(125000, "INR", "pay_test_123", "Recovery payment")
+
+    assert raised.value.status_code == 200
+    assert raised.value.response_body == {"id": "plink_test"}
+    assert raised.value.provider_code is None
+
+
+def test_payment_link_malformed_response_preserves_status_and_provider_code() -> None:
+    client = _client(
+        httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "error": {
+                        "code": "BAD_REQUEST_ERROR",
+                        "description": "bad request",
+                        "customer": {"email": "test@example.com"},
+                    },
+                    "authorization": "Basic secret-key",
+                },
+            )
+        )
+    )
+
+    with pytest.raises(RazorpayMalformedResponseError) as raised:
+        client.create_payment_link(125000, "INR", "pay_test_123", "Recovery payment")
+
+    assert raised.value.status_code == 200
+    assert raised.value.provider_code == "BAD_REQUEST_ERROR"
+    assert raised.value.response_body == {
+        "error": {
+            "code": "BAD_REQUEST_ERROR",
+            "description": "bad request",
+            "customer": {"id": "[REDACTED]"},
+        },
+        "authorization": "[REDACTED]",
+    }
+    assert "test@example.com" not in str(raised.value.response_body)
+    assert "Basic secret-key" not in str(raised.value.response_body)
 
 
 @pytest.mark.parametrize(
