@@ -1,61 +1,144 @@
 # Reclaim
 
-An autonomous revenue recovery platform for merchants, being built for the Razorpay AI Buildathon (Track 03: AI Revenue Recovery).
+Reclaim is a merchant-focused failed-payment recovery workflow built around a deterministic risk engine, a safe decision-validation layer, and a dashboard for local evaluation and monitoring.
 
-**Current status:** Tasks 1-5B complete; recovery actions remain dry-run only.
+## Current repository status
 
-## Planned tech stack
+This repository currently contains:
 
-- Frontend: Next.js, TypeScript, App Router, Tailwind CSS, ESLint
-- Backend: Python, FastAPI, Uvicorn, SQLAlchemy 2.x, PostgreSQL
-- Future (not yet implemented): n8n, automatic recovery, and an AI agent
+- a Python FastAPI backend in `backend/app`
+- a Next.js dashboard in `frontend`
+- PostgreSQL-backed persistence via SQLAlchemy models and database bootstrap code
+- a deterministic payment-risk and recovery-decision engine
+- a workflow-authenticated recovery endpoint for external orchestration
+- a Razorpay adapter for read-only provider calls and optional provider action execution
+- a synthetic evaluation pipeline and check-in artifacts under `docs/`
+- workflow exports under `workflows/` for n8n import
 
-## Repository structure
+This project is implemented and locally verifiable as a repository, but it does not include a repo-managed production deployment manifest or a verified live production deployment. The repository is a local/controlled environment project, not proof of live external business performance.
 
-```text
-reclaim/
-├── frontend/     # Next.js dashboard
-├── backend/      # FastAPI service
-├── workflows/    # Future n8n workflows
-├── data/         # Future synthetic payment data
-└── docs/         # Architecture and technical documentation
-```
+## What is implemented
+
+### Backend
+
+The backend is the source of truth for recovery policy, risk scoring, and validation. Key files include:
+
+- `backend/app/main.py` – FastAPI app and health endpoints
+- `backend/app/config.py` – environment-backed configuration loader
+- `backend/app/database.py` – engine, session factory, and schema initialization
+- `backend/app/services/revenue_risk.py` – deterministic risk scoring and eligibility logic
+- `backend/app/services/recovery_decision.py` – LLM-response validation and policy enforcement
+- `backend/app/services/razorpay_client.py` – Razorpay HTTP adapter with sanitized error handling
+- `backend/app/services/recovery_workflow.py` – end-to-end workflow orchestration
+- `backend/app/api/workflows.py` – authenticated workflow endpoint
+- `backend/app/api/recovery.py` – recovery history and summary reads
+- `backend/app/api/reconciliation.py` – reconciliation operations
+- `backend/app/api/follow_up.py` – follow-up workflow operations
+- `backend/app/api/integrations.py` – webhook and provider integration handling
+
+### Frontend dashboard
+
+The dashboard in `frontend` provides a local UI for:
+
+- creating a failed-payment evaluation payload
+- submitting it to the backend decision workflow
+- viewing decision output and action results
+- reading persisted recovery history
+- viewing merchant KPI summaries
+
+The key UI entry is `frontend/src/app/page.tsx`, and the API proxy routes live in:
+
+- `frontend/src/app/api/recovery/route.ts`
+- `frontend/src/app/api/recovery/summary/route.ts`
+
+### Workflow integration
+
+The repository includes workflow exports in `workflows/` that forward events to the backend through the authenticated recovery endpoint.
+
+### Evaluation framework
+
+The deterministic evaluation framework is implemented in:
+
+- `backend/app/evaluation/run.py`
+
+It generates a synthetic failed-payment dataset, runs the real Reclaim risk engine and decision logic, and calculates business/agent metrics. The current project artifacts are stored in:
+
+- `docs/evaluation_results.json`
+- `docs/evaluation_report.md`
+
+## How the recovery flow works
+
+The repository’s acting flow is:
+
+1. A failed-payment event enters the backend or a workflow endpoint.
+2. The event is validated against strict request schemas.
+3. The system builds a risk context with payment, customer, and recovery history.
+4. The deterministic Revenue Risk Engine scores recovery likelihood and eligibility.
+5. A decision is generated and validated before it is accepted.
+6. A safe action result is returned in dry-run mode by default.
+7. Persisted outcomes are stored and surfaced in the dashboard history/summary views.
+
+This is a controlled internal workflow, not a production autopilot. The repository uses dry-run semantics unless the relevant environment variables and execution flags are explicitly turned on.
+
+## Environment and configuration
+
+The repository reads settings from `backend/app/config.py` and the root `.env.example` file.
+
+Required local setup includes:
+
+- `DATABASE_URL` for PostgreSQL
+- optional `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` for Razorpay calls
+- optional `RAZORPAY_ACTIONS_ENABLED` to enable provider actions
+- optional `RAZORPAY_TEST_MODE` for Test Mode behavior
+- optional `RECLAIM_WORKFLOW_SECRET` for workflow auth
+- optional LLM settings for a live OpenAI-compatible or Gemini-compatible provider
+
+Important: the project does not commit secrets. The repo includes `.gitignore` exclusions for local `.env` files and the checked-in example file intentionally contains placeholders only.
 
 ## Local setup
 
-1. Install PostgreSQL and create a local database:
+### 1. Create a local environment file
 
-   ```sql
-   CREATE USER recoverai WITH PASSWORD 'localdev';
-   CREATE DATABASE reclaim OWNER recoverai;
-   ```
+From the repository root:
 
-2. Copy `.env.example` to `.env`, then export its `DATABASE_URL` in your shell. For local development it can be:
+```bash
+copy .env.example .env
+```
 
-   ```text
-   postgresql://recoverai:localdev@localhost:5432/reclaim
-   ```
+Set at least:
 
-   `DATABASE_URL` is required; the backend will not start without it.
+```dotenv
+DATABASE_URL=postgresql://<user>:<password>@localhost:5432/reclaim
+RECLAIM_WORKFLOW_SECRET=<workflow-secret>
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+```
 
-3. Create the initial local tables:
+### 2. Install backend dependencies
 
-   ```bash
-   cd backend
-   python -m app.init_db
-   ```
+```bash
+cd backend
+python -m venv .venv
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
 
-4. Install frontend dependencies with `cd frontend` followed by `npm install`.
-5. Create and activate a Python virtual environment, then install backend dependencies with `pip install -r backend/requirements.txt`.
+### 3. Initialize the database
 
-## Run locally
+```bash
+cd backend
+python -m app.init_db
+```
 
-Frontend:
+### 4. Install frontend dependencies
 
 ```bash
 cd frontend
-npm run dev
+npm install
 ```
+
+### 5. Run the services
 
 Backend:
 
@@ -64,34 +147,109 @@ cd backend
 uvicorn app.main:app --reload --env-file ../.env
 ```
 
-The backend health check is available at `GET http://127.0.0.1:8000/health`. Verify the PostgreSQL connection at `GET http://127.0.0.1:8000/health/db`; it returns `503 Service Unavailable` if PostgreSQL cannot be reached.
-
-## Synthetic payment data and revenue risk engine
-
-Generate a reproducible JSON dataset (defaults: 500 records, seed `42`):
+Frontend:
 
 ```bash
-cd backend
-python -m app.services.synthetic_data --count 500 --seed 42 --output ../data/sample_payments.json
+cd frontend
+npm run dev
 ```
 
-The deterministic Revenue Risk Engine is a backend service only; it takes typed payment, customer-history, recovery-history, and merchant-policy inputs. Its named rules and eligibility behavior are documented in [`docs/revenue-risk-engine.md`](docs/revenue-risk-engine.md).
+## API surface
 
-## AI recovery decision engine
+The current FastAPI app exposes these endpoints:
 
-Run a local decision demonstration without any external LLM call:
+- `GET /health`
+- `GET /health/db`
+- `POST /api/workflows/recovery`
+- `GET /api/recovery/history`
+- `GET /api/recovery/summary`
+- `POST /api/reconciliation/run`
+- `POST /api/recovery/follow-up`
+- `GET /api/integrations/razorpay/payments/{payment_id}`
 
-```bash
-cd backend
-python -m app.cli.recovery_decision --index 0 --fake
+The workflow endpoint requires the `X-Reclaim-Workflow-Secret` header and compares it to the configured `RECLAIM_WORKFLOW_SECRET` value.
+
+## Razorpay integration status
+
+The repository includes a Razorpay adapter and normalization layer, but Razorpay execution is intentionally guarded until configuration is present and explicit execution is enabled.
+
+The code does the following:
+
+- validates credentials before creating a client
+- reads provider responses into typed schemas
+- sanitizes provider payloads before logging errors
+- distinguishes authentication, invalid request, not-found, rate-limit, and upstream failures
+- ignores unknown or extra provider fields in the payment-link model rather than rejecting the full payload
+
+The project’s actual execution posture is safe-by-default: provider actions are not treated as automatic unless the app is explicitly configured to use them.
+
+## Evaluation proof included in the repository
+
+The repository contains an evaluation artifact generated from the current code. The latest dataset and metrics are recorded in `docs/evaluation_results.json` and summarized in `docs/evaluation_report.md`.
+
+The captured metrics include:
+
+- sample size: 500
+- seed: 42
+- total revenue at risk: 336501400
+- total recovered: 39931200
+- recovery rate: 11.87%
+- successful recovery count: 188
+- intervention count: 268
+- success rate: 70.15%
+
+This is proof of the implemented deterministic evaluation logic in the current repository. It is not proof of live external business performance.
+
+## Local verification status
+
+The repository includes local test and build verification artifacts from the current codebase:
+
+- backend test suite results: `189 passed, 1 warning`
+- frontend production build: successful `next build`
+
+Those checks validate the repository’s current implementation and are local evidence only.
+
+## What is not implemented as a repo-managed deployment
+
+The repository does not include:
+
+- a Dockerfile
+- a docker-compose file
+- a Render manifest
+- a Heroku Procfile
+- a GitHub Actions deployment workflow for production
+
+The project therefore documents local execution and external service configuration rather than a managed production deployment in the repo itself.
+
+## Security and secrets guidance
+
+- Never commit `.env` files or live credentials
+- Keep secrets in local environment configuration only
+- Do not paste keys or tokens into documentation or issue reports
+- The project intentionally keeps provider and workflow secrets outside source control
+
+## Repository structure
+
+```text
+Reclaim/
+├── backend/                     # FastAPI backend and service layer
+│   ├── app/                     # application code
+│   ├── tests/                  # backend test suite
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   └── pytest.ini
+├── frontend/                   # Next.js dashboard
+├── workflows/                  # n8n export files
+├── docs/                       # evaluation, deployment, and project docs
+├── data/                       # local data artifacts
+├── .env.example                # environment example template
+├── .gitignore                  # project ignores
+├── README.md                   # repo overview
+├── WORKFLOW_FIX_SUMMARY.md     # workflow-specific fix notes
+├── fix_workflow.py             # workflow repair helper
+└── .env                        # local environment file (not tracked)
 ```
 
-For a live, OpenAI-compatible provider call, set `RECOVERY_LLM_API_KEY`, `RECOVERY_LLM_MODEL`, and optionally `RECOVERY_LLM_BASE_URL`. The provider only returns a recommendation; the deterministic validator still enforces policy and no payment or workflow is executed. The versioned system prompt is at [`docs/prompts/recovery-agent.md`](docs/prompts/recovery-agent.md).
+## Final note
 
-## n8n recovery orchestration
-
-Task 5B adds an authenticated `POST /api/workflows/recovery` endpoint and an importable n8n workflow. The backend remains the source of truth for risk, eligibility, policy, and validated recovery decisions. All five action branches return dry-run results. See [`docs/n8n-recovery-workflow.md`](docs/n8n-recovery-workflow.md).
-
-## Environment variables
-
-`.env.example` documents `DATABASE_URL` and the Razorpay Test Mode integration variables. Never commit `.env` or real credentials. See [`docs/razorpay-integration.md`](docs/razorpay-integration.md) for setup and verification.
+Reclaim in this repository is a working local system for deterministic recovery evaluation, workflow auth, provider integration boundaries, and dashboard monitoring. It is documented and verified at the repository level, but it is not a live production deployment claim or a business performance benchmark.
