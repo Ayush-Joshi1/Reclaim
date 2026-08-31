@@ -1,5 +1,6 @@
 """Safe action-execution boundary for validated recovery decisions."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -8,6 +9,8 @@ from app.schemas.workflow import RecoveryActionResult
 from app.config import Settings, settings
 from app.services.razorpay_client import RazorpayClient, RazorpayClientError
 from app.services.notification import NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class ActionExecutor(Protocol):
@@ -131,7 +134,14 @@ class RazorpayActionExecutor:
                 reference_id=decision.payment_id[:40],
                 description=f"Recovery payment for {decision.payment_id}",
             )
-        except RazorpayClientError:
+        except RazorpayClientError as error:
+            logger.warning(
+                "Razorpay provider failure: %s | status_code=%s | provider_code=%s | response=%s",
+                type(error).__name__,
+                error.status_code,
+                error.provider_code,
+                error.response_body,
+            )
             return RecoveryActionResult(
                 payment_id=decision.payment_id,
                 action="PAYMENT_LINK",

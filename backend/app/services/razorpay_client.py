@@ -14,6 +14,55 @@ from app.schemas.razorpay import RazorpayPayment, RazorpayPaymentLink
 class RazorpayClientError(RuntimeError):
     """Base class for safe Razorpay integration failures."""
 
+    def __init__(
+        self,
+        *args: object,
+        status_code: int | None = None,
+        provider_code: str | None = None,
+        response_body: Any | None = None,
+        response_text: str | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = status_code
+        self.provider_code = provider_code
+        self.response_body = self._sanitize_payload(response_body)
+        self.response_text = self._sanitize_payload(response_text)
+
+    @staticmethod
+    def _sanitize_payload(value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            sanitized: dict[str, Any] = {}
+            for key, item in value.items():
+                lowered = str(key).lower()
+                if lowered in {"authorization", "api_key", "key", "secret", "token", "password"}:
+                    sanitized[key] = "[REDACTED]"
+                    continue
+                if lowered == "customer":
+                    sanitized[key] = {"id": "[REDACTED]"}
+                    continue
+                if lowered in {"email", "phone", "name", "contact"}:
+                    sanitized[key] = "[REDACTED]"
+                    continue
+                sanitized[key] = RazorpayClientError._sanitize_payload(item)
+            return sanitized
+        if isinstance(value, list):
+            return [RazorpayClientError._sanitize_payload(item) for item in value]
+        if isinstance(value, str):
+            return value if len(value) <= 300 else f"{value[:297]}..."
+        return value
+
+    def safe_log_details(self) -> dict[str, Any]:
+        return {
+            "error_type": type(self).__name__,
+            "message": str(self),
+            "status_code": self.status_code,
+            "provider_code": self.provider_code,
+            "response_body": self.response_body,
+            "response_text": self.response_text,
+        }
+
 
 class RazorpayAuthenticationError(RazorpayClientError):
     """Razorpay rejected the configured credentials."""
@@ -109,6 +158,19 @@ class RazorpayClient:
         except (TypeError, ValueError) as error:
             raise RazorpayMalformedResponseError("Razorpay returned an invalid Payment Link.") from error
 
+    @staticmethod
+    def _provider_error_details(payload: Any) -> tuple[str | None, str | None]:
+        if not isinstance(payload, dict):
+            return None, None
+        error_block = payload.get("error")
+        if isinstance(error_block, dict):
+            code = error_block.get("code") or payload.get("code")
+            description = error_block.get("description") or payload.get("description")
+            return str(code) if code is not None else None, str(description) if description is not None else None
+        code = payload.get("code")
+        description = payload.get("description")
+        return str(code) if code is not None else None, str(description) if description is not None else None
+
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:
             with httpx.Client(
@@ -123,22 +185,61 @@ class RazorpayClient:
         except httpx.RequestError as error:
             raise RazorpayNetworkError("Razorpay request could not be completed.") from error
 
-        if response.status_code == 401:
-            raise RazorpayAuthenticationError("Razorpay authentication failed.")
-        if response.status_code == 400:
-            raise RazorpayInvalidRequestError("Razorpay rejected the request.")
-        if response.status_code == 404:
-            raise RazorpayNotFoundError("Razorpay resource was not found.")
-        if response.status_code == 429:
-            raise RazorpayRateLimitError("Razorpay rate limit exceeded.")
-        if response.status_code >= 500:
-            raise RazorpayUpstreamError("Razorpay is temporarily unavailable.")
-        if response.is_error:
-            raise RazorpayClientError("Razorpay request failed.")
         try:
             payload = response.json()
         except ValueError as error:
+            payload = None
+            if response.is_error:
+                raise RazorpayMalformedResponseError(
+                    "Razorpay returned invalid JSON.",
+                    status_code=response.status_code,
+                    response_text=response.text,
+                ) from error
             raise RazorpayMalformedResponseError("Razorpay returned invalid JSON.") from error
+
+        provider_code, _ = self._provider_error_details(payload)
+        if response.status_code == 401:
+            raise RazorpayAuthenticationError(
+                "Razorpay authentication failed.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+            )
+        if response.status_code == 400:
+            raise RazorpayInvalidRequestError(
+                "Razorpay rejected the request.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+            )
+        if response.status_code == 404:
+            raise RazorpayNotFoundError(
+                "Razorpay resource was not found.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+            )
+        if response.status_code == 429:
+            raise RazorpayRateLimitError(
+                "Razorpay rate limit exceeded.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+            )
+        if response.status_code >= 500:
+            raise RazorpayUpstreamError(
+                "Razorpay is temporarily unavailable.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+            )
+        if response.is_error:
+            raise RazorpayClientError(
+                "Razorpay request failed.",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                response_body=payload,
+            )
         if not isinstance(payload, dict):
             raise RazorpayMalformedResponseError("Razorpay returned an invalid object.")
         return payload

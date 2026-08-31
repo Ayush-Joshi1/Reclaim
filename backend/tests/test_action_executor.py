@@ -115,6 +115,41 @@ def test_payment_link_provider_failure_is_safe(decision: ValidatedRecoveryDecisi
     assert "no further action" in result.message.lower()
 
 
+def test_payment_link_provider_failure_logs_diagnostic_details_without_leaking_secrets(
+    decision: ValidatedRecoveryDecision, caplog: pytest.LogCaptureFixture
+) -> None:
+    class FailingClient:
+        def create_payment_link(self, **kwargs: object) -> RazorpayPaymentLink:
+            raise RazorpayUpstreamError(
+                "upstream failure",
+                status_code=500,
+                provider_code="SERVER_ERROR",
+                response_body={
+                    "error": {
+                        "code": "SERVER_ERROR",
+                        "description": "upstream failed",
+                        "customer": {"email": "test@example.com"},
+                    },
+                    "authorization": "Basic secret-key",
+                },
+            )
+
+    payment_link_decision = decision.model_copy(update={"action": "PAYMENT_LINK"})
+
+    with caplog.at_level("WARNING"):
+        result = RazorpayActionExecutor(FailingClient(), enabled=True).execute(
+            payment_link_decision, amount=125000
+        )
+
+    assert result.status == "terminal"
+    assert result.mode == "dry_run"
+    assert "no further action" in result.message.lower()
+    assert "status_code=500" in caplog.text
+    assert "SERVER_ERROR" in caplog.text
+    assert "test@example.com" not in caplog.text
+    assert "Basic secret-key" not in caplog.text
+
+
 def test_payment_link_provider_is_not_called_for_approval_or_duplicate(
     decision: ValidatedRecoveryDecision,
 ) -> None:
