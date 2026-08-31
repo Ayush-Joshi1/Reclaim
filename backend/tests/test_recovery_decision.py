@@ -380,6 +380,55 @@ def test_markdown_fenced_json_response_is_parsed(monkeypatch: pytest.MonkeyPatch
     assert result["confidence"] == 0.9
 
 
+def test_live_gemini_response_shape_with_extra_content_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        model="gemini-3.5-flash-lite",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+
+    class DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        @property
+        def status_code(self) -> int:
+            return 200
+
+        @property
+        def headers(self) -> dict[str, str]:
+            return {"content-type": "application/json"}
+
+        @property
+        def text(self) -> str:
+            return '{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"{\\n\\t\\"action\\": \\\"PAYMENT_LINK\\\",\\n\\t\\"diagnosis\\": \\\"The payment failed due to a non-transient card decline on a high-value customer with strong historical payments.\\\",\\n\\t\\"reasoning\\": \\\"The payment is eligible, requires_approval is false, the failure reason is a card_declined decline, there are no previous recovery attempts, the failure occurred recently within 2 hours, and the deterministic risk score is 87 with a strong customer payment history.\\\",\\n\\t\\"confidence\\": 0.90,\\n\\t\\"requires_approval\\": false,\\n\\t\\"priority\\": \\\"HIGH\\\",\\n\\t\\"policy_constraints\\": [\\\"Payment is within the recovery window and below attempt limits.\\\", \\\"Amount is within the automatic action limit.\\\"],\\n\\t\\"expected_outcome\\": \\\"Sending a payment link may allow the customer to successfully complete the payment using an alternate or updated card without executing the transaction automatically.\\\"\\n}","extra_content":{"google":{"thought_signature":"abc"}},"role":"assistant"}}]}'
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "index": 0,
+                        "message": {
+                            "content": (
+                                '{\n\t"action": "PAYMENT_LINK",\n\t"diagnosis": "The payment failed due to a non-transient card decline on a high-value customer with strong historical payments.",\n\t"reasoning": "The payment is eligible, requires_approval is false, the failure reason is a card_declined decline, there are no previous recovery attempts, the failure occurred recently within 2 hours, and the deterministic risk score is 87 with a strong customer payment history.",\n\t"confidence": 0.90,\n\t"requires_approval": false,\n\t"priority": "HIGH",\n\t"policy_constraints": ["Payment is within the recovery window and below attempt limits.", "Amount is within the automatic action limit."],\n\t"expected_outcome": "Sending a payment link may allow the customer to successfully complete the payment using an alternate or updated card without executing the transaction automatically."\n}'
+                            ),
+                            "extra_content": {"google": {"thought_signature": "abc"}},
+                            "role": "assistant",
+                        },
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: DummyResponse())
+
+    result = client.generate_recovery_decision(_context())
+
+    assert result["action"] == "PAYMENT_LINK"
+    assert result["confidence"] == 0.9
+    assert result["priority"] == "HIGH"
+
+
 def test_gemini_request_uses_bearer_auth_without_logging_key(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
