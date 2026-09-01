@@ -461,7 +461,7 @@ class TestWorkflowContract:
         assert "X-Reclaim-Workflow-Secret" in text
         assert "reclaim-demo-secret-2026" not in text
         assert "RECLAIM_WORKFLOW_SECRET" in text
-        assert "RECLAIM_BACKEND_URL" in text
+        assert "https://reclaim-wirm.onrender.com/api/workflows/recovery" in text
 
 
 if __name__ == "__main__":

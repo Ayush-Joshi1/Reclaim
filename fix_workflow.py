@@ -14,7 +14,7 @@ for node in workflow['nodes']:
         for param in node['parameters']['headerParameters']['parameters']:
             if param['name'] == 'X-Reclaim-Workflow-Secret':
                 param['value'] = '={{ $vars.RECLAIM_WORKFLOW_SECRET }}'
-        print('✓ Fixed HTTP node URL and secret')
+        print('Fixed HTTP node URL and secret')
         break
 
 for node in workflow['nodes']:
@@ -23,7 +23,7 @@ for node in workflow['nodes']:
             'RECLAIM_WORKFLOW_SECRET: "reclaim-demo-secret-2026"',
             'RECLAIM_WORKFLOW_SECRET: "={{ $vars.RECLAIM_WORKFLOW_SECRET }}"',
         )
-        print('✓ Removed literal workflow secret from payload preparation')
+        print('Removed literal workflow secret from payload preparation')
         break
 
 # Write back
@@ -35,5 +35,5 @@ assert 'reclaim-demo-secret-2026' not in text, "Literal secret still in workflow
 assert 'early-excellence-telephone-honey' not in text, "Hardcoded URL still in workflow!"
 assert 'RECLAIM_WORKFLOW_SECRET' in text, "Missing RECLAIM_WORKFLOW_SECRET variable!"
 assert 'RECLAIM_BACKEND_URL' in text, "Missing RECLAIM_BACKEND_URL variable!"
-print('✓ Verified: No literal secrets or URLs')
-print('✓ Verified: Environment variables in place')
+print('Verified: No literal secrets or URLs')
+print('Verified: Environment variables in place')

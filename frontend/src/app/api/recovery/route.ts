@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const backendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.RECLAIM_BACKEND_URL ||
+  "http://localhost:8000";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

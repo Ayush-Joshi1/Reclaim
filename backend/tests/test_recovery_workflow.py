@@ -178,7 +178,7 @@ def test_n8n_workflow_uses_current_backend_contract() -> None:
     assert any("/api/workflows/recovery" in url for url in endpoint_calls)
     assert "reclaim-demo-secret-2026" not in text
     assert "RECLAIM_WORKFLOW_SECRET" in text
-    assert "RECLAIM_BACKEND_URL" in text
+    assert "https://reclaim-wirm.onrender.com/api/workflows/recovery" in text
     assert "X-Reclaim-Workflow-Secret" in text
 
 

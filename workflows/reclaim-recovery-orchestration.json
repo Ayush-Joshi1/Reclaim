@@ -1,1379 +1,690 @@
-﻿{
-
+{
   "nodes": [
-
     {
-
       "parameters": {
-
         "httpMethod": "POST",
-
         "path": "reclaim-recovery",
-
         "responseMode": "lastNode",
-
         "options": {}
-
       },
-
       "id": "6651b1a3-e046-4661-b60e-270d01dd61ec",
-
       "name": "Recovery Event Webhook",
-
       "type": "n8n-nodes-base.webhook",
-
       "typeVersion": 2,
-
       "position": [
-
         -14496,
-
         5984
-
       ],
-
       "webhookId": "reclaim-recovery-webhook"
-
     },
-
     {
-
       "parameters": {
-
         "jsCode": "const item = $input.first().json || {};\n\nlet r = item;\n\n// Handle webhook body\nlet b = r?.body ?? r;\n\nif (typeof b === \"string\") {\n  try {\n    b = JSON.parse(b);\n  } catch {\n    b = {};\n  }\n}\n\nif (!b || typeof b !== \"object\" || Array.isArray(b)) {\n  b = {};\n}\n\n// Razorpay payment entity\nconst entity =\n  b?.payload?.payment?.entity ||\n  b?.payment?.entity ||\n  {};\n\n// Basic Razorpay fields\nconst paymentId =\n  entity?.id ||\n  b?.payment_id ||\n  null;\n\nconst eventTypeRaw =\n  b?.event ||\n  b?.event_type ||\n  \"payment.failed\";\n\nconst eventType =\n  eventTypeRaw === \"payment.failed\"\n    ? \"payment_failed\"\n    : eventTypeRaw;\n\nconst createdAt =\n  b?.created_at ||\n  entity?.created_at ||\n  Math.floor(Date.now() / 1000);\n\nconst eventId =\n  b?.event_id ||\n  b?.id ||\n  (paymentId\n    ? `rzp_${paymentId}_${createdAt}`\n    : `rzp_event_${Date.now()}`);\n\nconst amount =\n  entity?.amount != null\n    ? Number(entity.amount) / 100\n    : null;\n\nconst currency =\n  entity?.currency ||\n  \"INR\";\n\nconst method =\n  entity?.method ||\n  null;\n\nconst status =\n  entity?.status ||\n  \"failed\";\n\nconst failureReason =\n  entity?.error_reason ||\n  entity?.error_description ||\n  entity?.error_source ||\n  \"payment_failed\";\n\nconst customerId =\n  entity?.email ||\n  entity?.contact ||\n  paymentId ||\n  null;\n\nconst failedAt =\n  new Date(Number(createdAt) * 1000).toISOString();\n\n\n// Final payload expected by Reclaim API\nconst api_payload = {\n  event_id: String(eventId),\n\n  event_type: eventType,\n\n  timestamp: failedAt,\n\n  source: \"razorpay\",\n\n  recovery_attempt_count: 0,\n\n  payment_id: paymentId,\n\n  payment: {\n    payment_id: paymentId,\n    amount: amount,\n    currency: currency,\n    status: status,\n    payment_method: method,\n    failure_reason: failureReason,\n    failed_at: failedAt,\n    time_since_failure_hours: 0\n  },\n\n  customer: {\n    customer_id: String(customerId || paymentId || \"unknown\"),\n    notification_count: 0,\n    customer_age_days: 0,\n    previous_successful_payments: 0,\n    previous_failed_payments: 1,\n    previous_recovery_attempts: 0,\n    customer_lifetime_value: amount || 0,\n    average_previous_payment: amount || 0,\n    recent_payment_frequency: 1\n  }\n};\n\n\n// Validation\nconst errors = [];\n\nif (!api_payload.event_id) {\n  errors.push(\"Missing event_id\");\n}\n\nif (!api_payload.payment_id) {\n  errors.push(\"Missing payment_id\");\n}\n\nif (api_payload.event_type !== \"payment_failed\") {\n  errors.push(\"Invalid event_type\");\n}\n\nif (\n  api_payload.payment.amount === null ||\n  api_payload.payment.amount === undefined\n) {\n  errors.push(\"Missing payment amount\");\n}\n\nif (!api_payload.payment.currency) {\n  errors.push(\"Missing currency\");\n}\n\nif (!api_payload.payment.payment_method) {\n  errors.push(\"Missing payment method\");\n}\n\nif (!api_payload.customer.customer_id) {\n  errors.push(\"Missing customer_id\");\n}\n\n\n// Output\nreturn [\n  {\n    json: {\n      valid: errors.length === 0,\n\n      error_message:\n        errors.length > 0\n          ? errors.join(\"; \")\n          : null,\n\n      event_id: api_payload.event_id,\n\n      payment_id: api_payload.payment_id,\n\n      api_payload\n    }\n  }\n];"
-
       },
-
       "id": "166f8c5e-e349-45ca-bc7f-5e1106107b28",
-
       "name": "Prepare Recovery Payload",
-
       "type": "n8n-nodes-base.code",
-
       "typeVersion": 2,
-
       "position": [
-
         -14256,
-
         6016
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "conditions": {
-
           "options": {
-
             "caseSensitive": true,
-
             "leftValue": "",
-
             "typeValidation": "strict",
-
             "version": 2
-
           },
-
           "conditions": [
-
             {
-
               "id": "check-valid",
-
               "leftValue": "={{ $json.valid }}",
-
               "rightValue": true,
-
               "operator": {
-
                 "type": "boolean",
-
                 "operation": "true",
-
                 "singleValue": true
-
               }
-
             }
-
           ],
-
           "combinator": "and"
-
         },
-
         "options": {}
-
       },
-
       "id": "135427a8-3b5f-4402-89e1-34f9d90a73b5",
-
       "name": "Validate Recovery Event",
-
       "type": "n8n-nodes-base.if",
-
       "typeVersion": 2.2,
-
       "position": [
-
         -13984,
-
         6032
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "method": "POST",
-
         "url": "https://reclaim-wirm.onrender.com/api/workflows/recovery",
-
         "authentication": "genericCredentialType",
-
         "genericAuthType": "httpHeaderAuth",
-
         "sendHeaders": true,
-
         "headerParameters": {
-
           "parameters": [
-
             {
-
               "name": "Content-Type",
-
               "value": "application/json"
-
             },
-
             {
-
               "name": "X-Reclaim-Workflow-Secret",
-
-              "value": "reclaim-demo-secret-2026"
-
+              "value": "={{ $vars.RECLAIM_WORKFLOW_SECRET }}"
             }
-
           ]
-
         },
-
         "sendBody": true,
-
         "specifyBody": "json",
-
         "jsonBody": "={{ JSON.stringify($json.api_payload) }}",
-
         "options": {
-
           "timeout": 20000
-
         }
-
       },
-
       "id": "7268986c-0724-4478-92c3-5a242f848d43",
-
       "name": "Reclaim Recovery Evaluation",
-
       "type": "n8n-nodes-base.httpRequest",
-
       "typeVersion": 4.2,
-
       "position": [
-
         -13728,
-
         5936
-
       ],
-
       "credentials": {
-
         "httpHeaderAuth": {
-
           "id": "l0Yp2IF1eJXcg0lX",
-
           "name": "Header Auth account"
-
         }
-
       },
-
       "onError": "continueRegularOutput"
-
     },
-
     {
-
       "parameters": {
-
         "jsCode": "const items = $input.all();\n\nfunction errorOut(message, paymentId, eventId, backendResponse) {\n  return [{\n    json: {\n      ok: false,\n      action: \"ERROR\",\n      decision_action: null,\n      valid_action: false,\n      error_message: message,\n      status: \"error\",\n      payment_id: paymentId != null ? paymentId : null,\n      event_id: eventId != null ? eventId : null,\n      backend_response: backendResponse != null ? backendResponse : null\n    }\n  }];\n}\n\nfunction unwrap(value) {\n  if (value == null) return null;\n\n  if (typeof value === \"string\") {\n    try {\n      const parsed = JSON.parse(value);\n      return unwrap(parsed);\n    } catch {\n      return value;\n    }\n  }\n\n  if (typeof value !== \"object\" || Array.isArray(value)) return null;\n\n  if (value.action != null) return value.action;\n  if (value.decision_action != null) return value.decision_action;\n\n  if (value.body != null) return unwrap(value.body);\n  if (value.data != null) return unwrap(value.data);\n  if (value.decision != null) return unwrap(value.decision);\n  if (value.result != null) return unwrap(value.result);\n\n  return null;\n}\n\nif (!items.length) {\n  return errorOut(\"Reclaim returned no response.\", null, null, null);\n}\n\nlet data = items[0].json;\nif (data && data.error) {\n  const err = data.error;\n  const httpCode = err.httpCode || (err.context && err.context.httpCode) || null;\n  const msg = err.message || err.description || String(err);\n  const prefix = String(httpCode) === \"422\" ? \"Reclaim API validation failed: \" : \"Reclaim API request failed: \";\n  return errorOut(prefix + msg, null, null, { error: err });\n}\nif (typeof data === \"string\") {\n  try { data = JSON.parse(data); } catch (e) {\n    return errorOut(\"Reclaim returned invalid JSON.\", null, null, null);\n  }\n}\nif (!data || typeof data !== \"object\") {\n  return errorOut(\"Reclaim returned an empty response.\", null, null, null);\n}\n\nconst paymentId = data.payment_id != null ? data.payment_id\n  : (data.payment && data.payment.payment_id != null ? data.payment.payment_id\n  : (data.decision && data.decision.payment_id != null ? data.decision.payment_id : null));\nconst eventId = data.event_id != null ? data.event_id\n  : (data.decision && data.decision.event_id != null ? data.decision.event_id : null);\n\nconst allowed = [\"RETRY\", \"PAYMENT_LINK\", \"REMINDER\", \"ESCALATE\", \"STOP\"];\nlet apiAction = unwrap(data);\nif (typeof apiAction === \"string\") apiAction = apiAction.trim().toUpperCase();\nif (!apiAction) {\n  return errorOut(\"Recovery action missing from Reclaim response.\", paymentId, eventId, data);\n}\nif (!allowed.includes(apiAction)) {\n  return errorOut(\"Unsupported recovery action: \" + apiAction, paymentId, eventId, data);\n}\n\nreturn [{\n  json: {\n    ok: true,\n    action: apiAction,\n    decision_action: apiAction,\n    valid_action: true,\n    status: \"success\",\n    payment_id: paymentId,\n    event_id: eventId,\n    backend_response: data,\n    error_message: null,\n    message: \"Validated recovery action: \" + apiAction + \".\"\n  }\n}];"
-
       },
-
       "id": "423c2b62-05d8-429b-a381-598216fd0ca4",
-
       "name": "Normalize Evaluation Response",
-
       "type": "n8n-nodes-base.code",
-
       "typeVersion": 2,
-
       "position": [
-
         -13488,
-
         5952
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "rules": {
-
           "values": [
-
             {
-
               "conditions": {
-
                 "options": {
-
                   "caseSensitive": true,
-
                   "leftValue": "",
-
                   "typeValidation": "strict",
-
                   "version": 2
-
                 },
-
                 "conditions": [
-
                   {
-
                     "leftValue": "={{ $json.action }}",
-
                     "rightValue": "RETRY",
-
                     "operator": {
-
                       "type": "string",
-
                       "operation": "equals"
-
                     }
-
                   }
-
                 ],
-
                 "combinator": "and"
-
               }
-
             },
-
             {
-
               "conditions": {
-
                 "options": {
-
                   "caseSensitive": true,
-
                   "leftValue": "",
-
                   "typeValidation": "strict",
-
                   "version": 2
-
                 },
-
                 "conditions": [
-
                   {
-
                     "leftValue": "={{ $json.action }}",
-
                     "rightValue": "PAYMENT_LINK",
-
                     "operator": {
-
                       "type": "string",
-
                       "operation": "equals"
-
                     }
-
                   }
-
                 ],
-
                 "combinator": "and"
-
               }
-
             },
-
             {
-
               "conditions": {
-
                 "options": {
-
                   "caseSensitive": true,
-
                   "leftValue": "",
-
                   "typeValidation": "strict",
-
                   "version": 2
-
                 },
-
                 "conditions": [
-
                   {
-
                     "leftValue": "={{ $json.action }}",
-
                     "rightValue": "REMINDER",
-
                     "operator": {
-
                       "type": "string",
-
                       "operation": "equals"
-
                     }
-
                   }
-
                 ],
-
                 "combinator": "and"
-
               }
-
             },
-
             {
-
               "conditions": {
-
                 "options": {
-
                   "caseSensitive": true,
-
                   "leftValue": "",
-
                   "typeValidation": "strict",
-
                   "version": 2
-
                 },
-
                 "conditions": [
-
                   {
-
                     "leftValue": "={{ $json.action }}",
-
                     "rightValue": "ESCALATE",
-
                     "operator": {
-
                       "type": "string",
-
                       "operation": "equals"
-
                     }
-
                   }
-
                 ],
-
                 "combinator": "and"
-
               }
-
             },
-
             {
-
               "conditions": {
-
                 "options": {
-
                   "caseSensitive": true,
-
                   "leftValue": "",
-
                   "typeValidation": "strict",
-
                   "version": 2
-
                 },
-
                 "conditions": [
-
                   {
-
                     "leftValue": "={{ $json.action }}",
-
                     "rightValue": "STOP",
-
                     "operator": {
-
                       "type": "string",
-
                       "operation": "equals"
-
                     }
-
                   }
-
                 ],
-
                 "combinator": "and"
-
               }
-
             }
-
           ]
-
         },
-
         "options": {
-
           "fallbackOutput": "extra"
-
         }
-
       },
-
       "id": "d7cf92c1-75fd-4304-8321-1900efb739d6",
-
       "name": "Route Validated Decision",
-
       "type": "n8n-nodes-base.switch",
-
       "typeVersion": 3.2,
-
       "position": [
-
         -13280,
-
         5936
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "retry-action",
-
               "name": "action",
-
               "value": "RETRY",
-
               "type": "string"
-
             },
-
             {
-
               "id": "retry-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "retry-status",
-
               "name": "status",
-
               "value": "queued",
-
               "type": "string"
-
             },
-
             {
-
               "id": "retry-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "retry-message",
-
               "name": "message",
-
               "value": "A payment retry would be requested; no retry was performed.",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "735d63c6-5ec9-4888-a944-836e94c63ac7",
-
       "name": "RETRY Dry Run",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -12992,
-
         5728
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "payment-action",
-
               "name": "action",
-
               "value": "PAYMENT_LINK",
-
               "type": "string"
-
             },
-
             {
-
               "id": "payment-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "payment-status",
-
               "name": "status",
-
               "value": "queued",
-
               "type": "string"
-
             },
-
             {
-
               "id": "payment-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "payment-message",
-
               "name": "message",
-
               "value": "A payment link would be requested; no link was created or sent.",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "368eaf1f-3ff9-42fd-b280-433e180ab34a",
-
       "name": "PAYMENT_LINK Dry Run",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -12992,
-
         5872
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "reminder-action",
-
               "name": "action",
-
               "value": "REMINDER",
-
               "type": "string"
-
             },
-
             {
-
               "id": "reminder-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "reminder-status",
-
               "name": "status",
-
               "value": "queued",
-
               "type": "string"
-
             },
-
             {
-
               "id": "reminder-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "reminder-message",
-
               "name": "message",
-
               "value": "A payment reminder would be sent; no reminder was sent.",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "69155d9e-ba71-428f-815d-37dc77461c6a",
-
       "name": "REMINDER Dry Run",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -12992,
-
         6000
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "escalate-action",
-
               "name": "action",
-
               "value": "ESCALATE",
-
               "type": "string"
-
             },
-
             {
-
               "id": "escalate-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "escalate-status",
-
               "name": "status",
-
               "value": "queued",
-
               "type": "string"
-
             },
-
             {
-
               "id": "escalate-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "escalate-message",
-
               "name": "message",
-
               "value": "The payment would be escalated for manual review; no escalation was performed.",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "ee585f72-2350-4808-a46c-0ba3f41f577b",
-
       "name": "ESCALATE Dry Run",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -12992,
-
         6128
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "stop-action",
-
               "name": "action",
-
               "value": "STOP",
-
               "type": "string"
-
             },
-
             {
-
               "id": "stop-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "stop-status",
-
               "name": "status",
-
               "value": "terminal",
-
               "type": "string"
-
             },
-
             {
-
               "id": "stop-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "stop-message",
-
               "name": "message",
-
               "value": "Recovery was stopped; no recovery action was performed.",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "f94a696b-c190-4b98-8ad2-1fab19f414a2",
-
       "name": "STOP Result",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -12992,
-
         6256
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "error-action",
-
               "name": "action",
-
               "value": "ERROR",
-
               "type": "string"
-
             },
-
             {
-
               "id": "error-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "error-status",
-
               "name": "status",
-
               "value": "error",
-
               "type": "string"
-
             },
-
             {
-
               "id": "error-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id ?? null }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "error-message",
-
               "name": "message",
-
               "value": "={{ $json.message ?? \"The recovery event could not be processed.\" }}",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "336fda80-b8e2-48a7-af76-e31f94246e9f",
-
       "name": "Error Result",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -12992,
-
         6416
-
       ]
-
     },
-
     {
-
       "parameters": {
-
         "assignments": {
-
           "assignments": [
-
             {
-
               "id": "invalid-action",
-
               "name": "action",
-
               "value": "ERROR",
-
               "type": "string"
-
             },
-
             {
-
               "id": "invalid-mode",
-
               "name": "mode",
-
               "value": "dry_run",
-
               "type": "string"
-
             },
-
             {
-
               "id": "invalid-status",
-
               "name": "status",
-
               "value": "error",
-
               "type": "string"
-
             },
-
             {
-
               "id": "invalid-payment",
-
               "name": "payment_id",
-
               "value": "={{ $json.payment_id ?? null }}",
-
               "type": "string"
-
             },
-
             {
-
               "id": "invalid-message",
-
               "name": "message",
-
               "value": "={{ $json.error_message ?? \"Invalid recovery event\" }}",
-
               "type": "string"
-
             }
-
           ]
-
         },
-
         "options": {}
-
       },
-
       "id": "aabe3ea5-2dc9-41d3-b157-79f4581b6f5a",
-
       "name": "Invalid Event Response",
-
       "type": "n8n-nodes-base.set",
-
       "typeVersion": 3.4,
-
       "position": [
-
         -13536,
-
         6176
-
       ]
-
     }
-
   ],
-
   "connections": {
-
     "Recovery Event Webhook": {
-
       "main": [
-
         [
-
           {
-
             "node": "Prepare Recovery Payload",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ]
-
       ]
-
     },
-
     "Prepare Recovery Payload": {
-
       "main": [
-
         [
-
           {
-
             "node": "Validate Recovery Event",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ]
-
       ]
-
     },
-
     "Validate Recovery Event": {
-
       "main": [
-
         [
-
           {
-
             "node": "Reclaim Recovery Evaluation",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ],
-
         [
-
           {
-
             "node": "Invalid Event Response",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ]
-
       ]
-
     },
-
     "Reclaim Recovery Evaluation": {
-
       "main": [
-
         [
-
           {
-
             "node": "Normalize Evaluation Response",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ]
-
       ]
-
     },
-
     "Normalize Evaluation Response": {
-
       "main": [
-
         [
-
           {
-
             "node": "Route Validated Decision",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ]
-
       ]
-
     },
-
     "Route Validated Decision": {
-
       "main": [
-
         [
-
           {
-
             "node": "RETRY Dry Run",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ],
-
         [
-
           {
-
             "node": "PAYMENT_LINK Dry Run",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ],
-
         [
-
           {
-
             "node": "REMINDER Dry Run",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ],
-
         [
-
           {
-
             "node": "ESCALATE Dry Run",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ],
-
         [
-
           {
-
             "node": "STOP Result",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ],
-
         [
-
           {
-
             "node": "Error Result",
-
             "type": "main",
-
             "index": 0
-
           }
-
         ]
-
       ]
-
     }
-
   },
-
   "pinData": {},
-
   "meta": {
-
     "instanceId": "15ef0122ce8c5f963295f8990aa06ae20f07f4c83ccdce0a59743db4597c313b"
-
   }
-
 }

@@ -27,6 +27,7 @@ class Settings:
     recovery_llm_api_key: str = ""
     recovery_llm_model: str = ""
     recovery_llm_base_url: str = "https://api.openai.com/v1"
+    cors_allowed_origins: list[str] = None  # type: ignore[assignment]
     reconciliation_max_attempts: int = 3
     follow_up_lease_seconds: int = 300
 
@@ -38,6 +39,10 @@ class Settings:
             raise ConfigurationError(
                 "DATABASE_URL is required. Set it to a PostgreSQL connection URL before starting Reclaim."
             )
+
+        cors_allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://*.vercel.app")
+        parsed_origins = [origin.strip() for origin in cors_allowed_origins.split(",") if origin.strip()]
+
         return cls(
             database_url=database_url,
             razorpay_key_id=os.getenv("RAZORPAY_KEY_ID", ""),
@@ -50,6 +55,7 @@ class Settings:
             recovery_llm_api_key=os.getenv("RECOVERY_LLM_API_KEY", ""),
             recovery_llm_model=os.getenv("RECOVERY_LLM_MODEL", ""),
             recovery_llm_base_url=os.getenv("RECOVERY_LLM_BASE_URL", "https://api.openai.com/v1"),
+            cors_allowed_origins=parsed_origins,
             reconciliation_max_attempts=int(os.getenv("RECONCILIATION_MAX_ATTEMPTS", "3")),
             follow_up_lease_seconds=int(os.getenv("FOLLOW_UP_LEASE_SECONDS", "300")),
         )

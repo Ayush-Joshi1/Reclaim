@@ -28,6 +28,15 @@ def test_settings_default_razorpay_base_url(monkeypatch: pytest.MonkeyPatch) -> 
     assert settings.razorpay_base_url == "https://api.razorpay.com/v1"
 
 
+def test_settings_parse_cors_allowed_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/reclaim")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,https://*.vercel.app")
+
+    settings = Settings.from_environment()
+
+    assert settings.cors_allowed_origins == ["http://localhost:3000", "https://*.vercel.app"]
+
+
 def test_settings_reject_missing_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
 

@@ -381,9 +381,9 @@ class TestWorkflowContract:
         assert "reclaim-demo-secret-2026" not in text
         assert "early-excellence-telephone-honey.trycloudflare.com" not in text
         
-        # Verify environment variables are used
+        # Verify runtime configuration is used for the auth secret and the public backend endpoint
         assert "RECLAIM_WORKFLOW_SECRET" in text or "$vars.RECLAIM_WORKFLOW_SECRET" in text
-        assert "RECLAIM_BACKEND_URL" in text or "$vars.RECLAIM_BACKEND_URL" in text
+        assert "https://reclaim-wirm.onrender.com/api/workflows/recovery" in text
         assert "/api/workflows/recovery" in text
 
     def test_workflow_json_is_valid(self) -> None:

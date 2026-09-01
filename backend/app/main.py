@@ -33,9 +33,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Reclaim API")
 
+cors_origins = settings.cors_allowed_origins or ["http://localhost:3000"]
+# Allow Vercel preview/homepage hosts while keeping the list explicit and non-wildcard for credentials.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https://[a-z0-9-]+\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
