@@ -1,4 +1,4 @@
-{
+﻿{
   "nodes": [
     {
       "parameters": {
@@ -79,7 +79,7 @@
             },
             {
               "name": "X-Reclaim-Workflow-Secret",
-              "value": "={{ $vars.RECLAIM_WORKFLOW_SECRET }}"
+              "value": "reclaim-demo-secret-2026"
             }
           ]
         },
