@@ -82,6 +82,7 @@ def test_valid_workflow_event_reaches_decision_layer() -> None:
         "mode": "dry_run",
         "status": "queued",
         "message": "A payment retry would be requested; no payment operation was performed.",
+        "payment_link": None,
         "execution_mode": "dry_run",
         "provider_called": False,
         "execution_succeeded": True,
@@ -295,7 +296,8 @@ def test_provider_executor_is_used_for_payment_link_when_enabled(
     assert result.action == "PAYMENT_LINK"
     assert result.result.execution_mode == "provider"
     assert result.result.provider_called is True
-    assert calls == [(125_000, "INR", "pay_workflow_test", "Recovery payment for pay_workflow_test")]
+    # Amount in INR (125_000) is converted to paise (12_500_000) before calling client
+    assert calls == [(12_500_000, "INR", "pay_workflow_test", "Recovery payment for pay_workflow_test")]
     assert "https://rzp.io/i/live123" in result.result.message
 
 
@@ -374,7 +376,7 @@ def test_route_executes_real_razorpay_client_for_payment_link(
     assert captured["path"] == "/v1/payment_links/"
     assert captured["authorization"].startswith("Basic ")
     assert captured["payload"] == {
-        "amount": 125_000,
+        "amount": 12_500_000,  # 125_000 INR converted to 12_500_000 paise
         "currency": "INR",
         "reference_id": payment_id,
         "description": f"Recovery payment for {payment_id}",

@@ -1,14 +1,68 @@
 """Tests for the safe recovery action execution boundary."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 
 from app.schemas.recovery_decision import ValidatedRecoveryDecision
-from app.services.action_executor import DryRunActionExecutor
+from app.services.action_executor import DryRunActionExecutor, convert_inr_to_paise
 from app.services.action_executor import RazorpayActionExecutor
 from app.services.razorpay_client import RazorpayClient, RazorpayUpstreamError
 from app.schemas.razorpay import RazorpayPaymentLink
+
+
+# Tests for INR to Paise conversion helper
+class TestConvertInrToPaise:
+    """Test INR to paise conversion for Razorpay API."""
+
+    @pytest.mark.parametrize(
+        "amount_inr,expected_paise",
+        [
+            # Standard whole rupee amounts
+            (121, 12100),
+            (500, 50000),
+            (1, 100),
+            (100, 10000),
+            # Decimal amounts
+            (121.50, 12150),
+            (999.99, 99999),
+            (0.50, 50),
+            (1.01, 101),
+            # Decimal type inputs
+            (Decimal("121"), 12100),
+            (Decimal("121.50"), 12150),
+            (Decimal("999.99"), 99999),
+            # Float inputs
+            (121.0, 12100),
+            (500.0, 50000),
+            # Edge cases
+            (0.01, 1),
+            (10.10, 1010),
+        ],
+    )
+    def test_converts_inr_amounts_to_paise(
+        self, amount_inr: int | float | Decimal, expected_paise: int
+    ) -> None:
+        """Verify INR amounts convert correctly to paise (100x multiplier)."""
+        result = convert_inr_to_paise(amount_inr)
+
+        assert result == expected_paise
+        assert isinstance(result, int)
+
+    def test_handles_string_representation_safely(self) -> None:
+        """Verify string inputs are converted safely without floating-point errors."""
+        # This would fail with float("121.50") * 100 due to floating-point precision
+        result = convert_inr_to_paise("121.50")
+
+        assert result == 12150
+
+    def test_rounds_correctly_with_half_up(self) -> None:
+        """Verify rounding uses ROUND_HALF_UP for consistent behavior."""
+        # Test typical rounding: 0.005 should round up to 0.01
+        result = convert_inr_to_paise(Decimal("0.005"))
+
+        assert result == 1  # 0.005 INR = 0.5 paise, rounds up to 1 paise
 
 
 @pytest.fixture
@@ -95,11 +149,14 @@ class PaymentLinkClient:
 def test_payment_link_uses_provider_when_enabled(decision: ValidatedRecoveryDecision) -> None:
     client = PaymentLinkClient()
     payment_link_decision = decision.model_copy(update={"action": "PAYMENT_LINK"})
-    result = RazorpayActionExecutor(client, enabled=True).execute(payment_link_decision, amount=125000)
+    # Amount is now expected in INR (rupees), not paise
+    result = RazorpayActionExecutor(client, enabled=True).execute(payment_link_decision, amount=1250)
 
     assert result.mode == "dry_run"
+    # Client receives the converted amount in paise: 1250 INR = 125000 paise
     assert client.calls == [(125000, "INR", "pay-executor-test", "Recovery payment for pay-executor-test")]
     assert "https://rzp.io/i/test" in result.message
+    assert result.payment_link == "https://rzp.io/i/test"
 
 
 def test_payment_link_provider_failure_is_safe(decision: ValidatedRecoveryDecision) -> None:

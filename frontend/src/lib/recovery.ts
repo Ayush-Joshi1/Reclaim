@@ -26,6 +26,7 @@ export interface RecoveryActionResult {
   mode: "dry_run";
   status: "queued" | "terminal";
   message: string;
+  payment_link: string | null;
 }
 
 export interface RecoveryDecision {

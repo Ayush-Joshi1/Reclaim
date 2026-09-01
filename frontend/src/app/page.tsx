@@ -151,7 +151,7 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100">
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-slate-900">Evaluate a payment</h2>
-              <p className="mt-1 text-sm text-slate-500">Run the project’s backend decision flow for a failed payment event.</p>
+              <p className="mt-1 text-sm text-slate-500">Run the projectÃ¢â‚¬â„¢s backend decision flow for a failed payment event.</p>
             </div>
             <div className="space-y-4">
               <label className="block text-sm font-medium text-slate-700">Payment ID<input required value={form.paymentId} onChange={(event) => updateField("paymentId", event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 font-mono text-sm text-slate-900 shadow-sm transition focus:border-slate-400 focus:outline-none" /></label>
@@ -411,6 +411,9 @@ function parsePolicyConstraints(value: string | null | undefined): string[] {
 
 function DecisionResult({ result }: { result: RecoveryWorkflowResponse }) {
   const decision = result.decision;
+  const paymentLink = result.result.payment_link;
+  const isPaymentLinkAction = result.action === "PAYMENT_LINK" && paymentLink;
+
   const details = [
     ["Payment ID", result.payment_id],
     ["Risk score", `${result.risk_score}/100`],
@@ -424,11 +427,61 @@ function DecisionResult({ result }: { result: RecoveryWorkflowResponse }) {
     ["Validation status", result.validation_status],
   ];
 
-  return <div>
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><p className="text-sm text-slate-500">Validated recovery decision</p><h2 className="mt-1 text-2xl font-semibold">{result.action}</h2></div><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">DRY RUN</span></div>
-    <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{details.map(([label, value]) => <div key={label}><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 text-sm font-semibold">{value}</dd></div>)}</dl>
-    <div className="mt-6 space-y-5 text-sm"><TextBlock label="Diagnosis" value={decision.diagnosis} /><TextBlock label="Reasoning" value={decision.reasoning} /><TextBlock label="Expected outcome" value={decision.expected_outcome} /><ListBlock label="Risk factors" items={decision.validation_notes} /><ListBlock label="Policy constraints" items={decision.policy_constraints} /><div className="rounded-md bg-slate-50 p-4"><p className="font-semibold">Dry-run result</p><p className="mt-1 text-slate-600">{result.result.message}</p><p className="mt-2 text-xs font-medium uppercase text-slate-500">Status: {result.result.status}</p></div></div>
-  </div>;
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+        <div>
+          <p className="text-sm text-slate-500">Validated recovery decision</p>
+          <h2 className="mt-1 text-2xl font-semibold">{result.action}</h2>
+        </div>
+        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">DRY RUN</span>
+      </div>
+
+      {/* Prominent Payment Link Section */}
+      {isPaymentLinkAction && (
+        <div className="mt-6 rounded-lg border-2 border-green-200 bg-green-50 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="inline-block h-3 w-3 rounded-full bg-green-600"></span>
+            <h3 className="text-lg font-semibold text-green-900">PAYMENT LINK READY</h3>
+          </div>
+          <p className="text-sm text-green-700 mb-4">Click below to open the payment link in a new tab.</p>
+          <a
+            href={paymentLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 transition-colors"
+          >
+            Open Payment Link Ã¢â€ â€™
+          </a>
+          <p className="mt-4 text-sm text-green-700">
+            <span className="font-semibold">Provider:</span> Razorpay Test Mode
+          </p>
+        </div>
+      )}
+
+      <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {details.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+            <dd className="mt-1 text-sm font-semibold">{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-6 space-y-5 text-sm">
+        <TextBlock label="Diagnosis" value={decision.diagnosis} />
+        <TextBlock label="Reasoning" value={decision.reasoning} />
+        <TextBlock label="Expected outcome" value={decision.expected_outcome} />
+        <ListBlock label="Risk factors" items={decision.validation_notes} />
+        <ListBlock label="Policy constraints" items={decision.policy_constraints} />
+        <div className="rounded-md bg-slate-50 p-4">
+          <p className="font-semibold">Dry-run result</p>
+          <p className="mt-1 text-slate-600">{result.result.message}</p>
+          <p className="mt-2 text-xs font-medium uppercase text-slate-500">Status: {result.result.status}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TextBlock({ label, value }: { label: string; value: string }) { return <div><p className="font-semibold">{label}</p><p className="mt-1 leading-6 text-slate-600">{value}</p></div>; }

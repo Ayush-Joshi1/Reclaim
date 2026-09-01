@@ -42,6 +42,7 @@ class RecoveryActionResult(BaseModel):
     mode: Literal["dry_run"] = "dry_run"
     status: Literal["queued", "terminal"]
     message: str
+    payment_link: str | None = None  # Structured payment link URL for PAYMENT_LINK actions
     execution_mode: Literal["dry_run", "provider"] = "dry_run"
     provider_called: bool = False
     execution_succeeded: bool = True

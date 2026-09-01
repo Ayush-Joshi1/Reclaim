@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Protocol
 
 from app.schemas.recovery_decision import ValidatedRecoveryDecision
@@ -11,6 +12,32 @@ from app.services.razorpay_client import RazorpayClient, RazorpayClientError
 from app.services.notification import NotificationService
 
 logger = logging.getLogger(__name__)
+
+
+def convert_inr_to_paise(amount_inr: int | float | Decimal) -> int:
+    """
+    Safely convert INR amount to paise (smallest currency unit) for Razorpay.
+
+    Razorpay API expects amounts in the smallest unit: paise for INR.
+    1 INR = 100 paise
+
+    Args:
+        amount_inr: Amount in INR (normal representation, e.g., 121 for Ã¢â€šÂ¹121.00)
+
+    Returns:
+        Amount in paise as integer (e.g., 12100 for Ã¢â€šÂ¹121.00)
+
+    Examples:
+        121 -> 12100 (Ã¢â€šÂ¹121.00)
+        121.50 -> 12150 (Ã¢â€šÂ¹121.50)
+        999.99 -> 99999 (Ã¢â€šÂ¹999.99)
+    """
+    amount_decimal = Decimal(str(amount_inr))
+    amount_paise_decimal = amount_decimal * Decimal("100")
+    amount_paise = int(
+        amount_paise_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    )
+    return amount_paise
 
 
 class ActionExecutor(Protocol):
@@ -128,8 +155,10 @@ class RazorpayActionExecutor:
         if decision.validation_status not in {"VALID", "OVERRIDDEN"}:
             return self._dry_run.execute(decision, event_id=event_id)
         try:
+            # Convert INR amount to paise for Razorpay API
+            amount_paise = convert_inr_to_paise(amount)
             link = self._client.create_payment_link(
-                amount=amount,
+                amount=amount_paise,
                 currency=currency,
                 reference_id=decision.payment_id[:40],
                 description=f"Recovery payment for {decision.payment_id}",
@@ -158,6 +187,7 @@ class RazorpayActionExecutor:
             action="PAYMENT_LINK",
             status="queued",
             message=f"Payment Link created in the configured Razorpay environment: {link.short_url}",
+            payment_link=link.short_url,  # Structured URL for frontend
             execution_mode="provider",
             provider_called=True,
             provider_payment_link_id=link.id,
