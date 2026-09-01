@@ -79,7 +79,7 @@
             },
             {
               "name": "X-Reclaim-Workflow-Secret",
-              "value": "reclaim-demo-secret-2026"
+              "value": "=reclaim-demo-secret-2026"
             }
           ]
         },
