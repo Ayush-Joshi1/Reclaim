@@ -20,7 +20,12 @@ class DecisionValidator:
         if hard_stop_reasons:
             return self._forced_stop(context, hard_stop_reasons)
 
-        notes: list[str] = ["LLM decision passed deterministic eligibility checks."]
+        canonical_action = self._canonical_action(context)
+        notes: list[str] = ["Deterministic recovery policy selected the final action."]
+        if candidate.action != canonical_action:
+            notes.append(
+                f"LLM action {candidate.action} was replaced by the canonical policy action {canonical_action}."
+            )
         requires_approval = context.risk.requires_approval
         if candidate.requires_approval != requires_approval:
             notes.append("Approval requirement was reset to the deterministic policy result.")
@@ -31,6 +36,7 @@ class DecisionValidator:
         return ValidatedRecoveryDecision(
             **candidate.model_copy(
                 update={
+                    "action": canonical_action,
                     "requires_approval": requires_approval,
                     "priority": context.risk.urgency,
                     "policy_constraints": self._policy_constraints(context),
@@ -45,16 +51,16 @@ class DecisionValidator:
         )
 
     def safe_failure(self, context: RecoveryContext, reason: str) -> ValidatedRecoveryDecision:
-        """Return STOP or ESCALATE after malformed/unavailable LLM output."""
+        """Return a deterministic action when the LLM cannot provide a decision."""
         if self._hard_stop_reasons(context):
             return self._forced_stop(context, ["LLM output was unusable; deterministic policy requires STOP."])
 
         return ValidatedRecoveryDecision(
-            action="ESCALATE",
+            action=self._canonical_action(context),
             diagnosis="AI recovery recommendation could not be validated.",
-            reasoning="No recovery action is selected until a merchant reviews the unavailable or malformed AI result.",
+            reasoning="The deterministic recovery policy selected the action because the AI result was unavailable or malformed.",
             confidence=0.0,
-            requires_approval=True,
+            requires_approval=context.risk.requires_approval,
             priority=context.risk.urgency,
             policy_constraints=self._policy_constraints(context),
             expected_outcome="Merchant review is required before any future recovery execution.",
@@ -65,6 +71,19 @@ class DecisionValidator:
             validation_notes=[f"LLM decision failed validation: {reason}"],
             decided_at=datetime.now(UTC),
         )
+
+    @staticmethod
+    def _canonical_action(context: RecoveryContext) -> str:
+        """Apply the same deterministic action order used by the fallback client."""
+        if not context.risk.recovery_eligible:
+            return "STOP"
+        if context.risk.requires_approval:
+            return "ESCALATE"
+        if context.payment.failure_reason in {"network_error", "timeout", "bank_error"}:
+            return "RETRY"
+        if context.risk.risk_score >= 70:
+            return "PAYMENT_LINK"
+        return "REMINDER"
 
     @staticmethod
     def _hard_stop_reasons(context: RecoveryContext) -> list[str]:

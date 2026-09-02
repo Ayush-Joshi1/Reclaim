@@ -171,6 +171,7 @@ class RecoveryWorkflowService:
                 state_reason=response.result.message,
                 provider_payment_id=response.result.provider_payment_id,
                 provider_payment_link_id=response.result.provider_payment_link_id,
+                provider_payment_link_url=response.result.payment_link,
                 provider_reference_id=response.result.provider_reference_id,
                 risk_score=response.decision.risk_score,
                 risk_level=response.decision.priority,
@@ -224,6 +225,7 @@ class RecoveryWorkflowService:
                 attempt.executed_at = result.executed_at
                 attempt.provider_payment_id = result.provider_payment_id or attempt.provider_payment_id
                 attempt.provider_payment_link_id = result.provider_payment_link_id or attempt.provider_payment_link_id
+                attempt.provider_payment_link_url = result.payment_link or attempt.provider_payment_link_url
                 attempt.provider_reference_id = result.provider_reference_id or attempt.provider_reference_id
                 attempt.recovery_state = recovery_state or attempt.recovery_state or "detected"
                 attempt.state_reason = result.message
@@ -248,6 +250,7 @@ class RecoveryWorkflowService:
             execution_mode=attempt.execution_mode,
             provider_called=attempt.provider_called,
             execution_succeeded=attempt.execution_succeeded,
+            payment_link=attempt.provider_payment_link_url,
             event_id=attempt.event_id,
             executed_at=attempt.executed_at or attempt.created_at,
         )

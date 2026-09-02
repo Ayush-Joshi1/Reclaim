@@ -398,6 +398,24 @@ def test_route_executes_real_razorpay_client_for_payment_link(
         assert attempt.provider_payment_link_id == "plink_route_test_001"
         assert attempt.provider_reference_id == payment_id
 
+    workflow_service.clear_idempotency()
+    duplicate_response = TestClient(app).post(
+        "/api/workflows/recovery",
+        headers={"X-Reclaim-Workflow-Secret": SECRET},
+        json=event_data(
+            event_id=event_id,
+            payment_id=payment_id,
+            payment=payment_data(
+                payment_id=payment_id,
+                amount=125_000,
+                failure_reason="card_declined",
+            ),
+        ),
+    )
+    assert duplicate_response.status_code == 200
+    assert duplicate_response.json()["duplicate"] is True
+    assert duplicate_response.json()["result"]["payment_link"] == "https://rzp.io/i/route-test-001"
+
 
 def test_internal_failure_is_safe(monkeypatch: pytest.MonkeyPatch) -> None:
     def fail(event: RecoveryEvent) -> Any:

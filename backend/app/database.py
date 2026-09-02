@@ -65,6 +65,7 @@ def create_tables() -> None:
             "state_reason": "VARCHAR(500)",
             "provider_payment_id": "VARCHAR(255)",
             "provider_payment_link_id": "VARCHAR(255)",
+            "provider_payment_link_url": "VARCHAR(2048)",
             "provider_reference_id": "VARCHAR(255)",
             "risk_score": "INTEGER",
             "risk_level": "VARCHAR(20)",

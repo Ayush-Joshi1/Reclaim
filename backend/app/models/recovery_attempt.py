@@ -31,6 +31,7 @@ class RecoveryAttempt(Base):
     state_reason: Mapped[str | None] = mapped_column(String(500))
     provider_payment_id: Mapped[str | None] = mapped_column(String(255), index=True)
     provider_payment_link_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    provider_payment_link_url: Mapped[str | None] = mapped_column(String(2048))
     provider_reference_id: Mapped[str | None] = mapped_column(String(255), index=True)
     risk_score: Mapped[int | None] = mapped_column(Integer)
     risk_level: Mapped[str | None] = mapped_column(String(20))

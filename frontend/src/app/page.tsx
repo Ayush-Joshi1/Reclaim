@@ -455,9 +455,9 @@ function DecisionResult({ result, payment }: { result: RecoveryWorkflowResponse;
         <div className="mt-6 rounded-lg border-2 border-green-200 bg-green-50 p-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="inline-block h-3 w-3 rounded-full bg-green-600"></span>
-            <h3 className="text-lg font-semibold text-green-900">PAYMENT LINK READY</h3>
+            <h3 className="text-lg font-semibold text-green-900">{paymentLink ? "PAYMENT LINK READY" : "PAYMENT LINK REQUESTED"}</h3>
           </div>
-          <p className="text-sm text-green-700 mb-4">Click below to open the payment link in a new tab.</p>
+          <p className="text-sm text-green-700 mb-4">{paymentLink ? "Payment link is available." : "Provider did not return a payment URL."}</p>
           {paymentLink ? <div className="flex flex-wrap items-center gap-3"><a
             href={paymentLink}
             target="_blank"
