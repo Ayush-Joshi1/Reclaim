@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   evaluateRecovery,
+  extractPaymentLink,
   fetchRecoveryHistory,
   fetchRecoverySummary,
   type PaymentMethod,
@@ -117,7 +118,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10 text-slate-900 sm:px-10 lg:px-12">
+    <main className="min-h-screen overflow-x-hidden px-6 py-10 text-slate-900 sm:px-10 lg:px-12">
       <section className="mx-auto max-w-7xl">
         <header className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -172,10 +173,10 @@ export default function Home() {
             <button disabled={isLoading} type="submit" className="mt-6 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">{isLoading ? "Evaluating..." : "Evaluate recovery"}</button>
           </form>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100" aria-live="polite">
+          <section className="min-h-0 max-h-[calc(100vh-14rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-slate-100" aria-live="polite">
             {!result && !error && <div className="flex min-h-64 items-center justify-center text-center text-sm text-slate-500">Submit an event to see the validated recovery decision.</div>}
-            {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><p className="font-semibold">Evaluation failed</p><p className="mt-1">{error}</p></div>}
-            {result && <DecisionResult result={result} />}
+            {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><p className="text-xs font-semibold uppercase tracking-wide">ERROR</p><p className="mt-1 font-semibold">Recovery unavailable</p><p className="mt-1">{error}</p></div>}
+            {result && <DecisionResult result={result} payment={form} />}
           </section>
         </div>
 
@@ -409,13 +410,31 @@ function parsePolicyConstraints(value: string | null | undefined): string[] {
   }
 }
 
-function DecisionResult({ result }: { result: RecoveryWorkflowResponse }) {
+function DecisionResult({ result, payment }: { result: RecoveryWorkflowResponse; payment: typeof initialForm }) {
   const decision = result.decision;
-  const paymentLink = result.result.payment_link;
-  const isPaymentLinkAction = result.action === "PAYMENT_LINK" && paymentLink;
+  const paymentLink = extractPaymentLink(result);
+  const isPaymentLinkAction = result.action === "PAYMENT_LINK";
+  const [copyStatus, setCopyStatus] = useState("Copy payment link");
+
+  async function copyPaymentLink() {
+    if (!paymentLink) return;
+    try {
+      await navigator.clipboard.writeText(paymentLink);
+      setCopyStatus("Copied");
+      window.setTimeout(() => setCopyStatus("Copy payment link"), 1600);
+    } catch {
+      setCopyStatus("Copy unavailable");
+    }
+  }
 
   const details = [
     ["Payment ID", result.payment_id],
+    ["Amount", formatCurrency(Number(payment.amount))],
+    ["Currency", payment.currency],
+    ["Payment method", payment.paymentMethod],
+    ["Failure reason", payment.failureReason || "Not provided"],
+    ["Attempt count", payment.recoveryAttemptCount],
+    ["Hours since failure", payment.timeSinceFailureHours],
     ["Risk score", `${result.risk_score}/100`],
     ["Recovery eligibility", result.eligible ? "Eligible" : "Not eligible"],
     ["Urgency", result.priority],
@@ -437,6 +456,8 @@ function DecisionResult({ result }: { result: RecoveryWorkflowResponse }) {
         <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">DRY RUN</span>
       </div>
 
+      {result.action !== "PAYMENT_LINK" && <div className={`mt-5 rounded-lg border p-4 ${actionStatusClasses(result.action)}`}><p className="text-xs font-semibold uppercase tracking-wide">{result.action}</p><p className="mt-1 text-sm font-semibold">{actionStatus(result.action)}</p></div>}
+
       {/* Prominent Payment Link Section */}
       {isPaymentLinkAction && (
         <div className="mt-6 rounded-lg border-2 border-green-200 bg-green-50 p-6">
@@ -445,14 +466,14 @@ function DecisionResult({ result }: { result: RecoveryWorkflowResponse }) {
             <h3 className="text-lg font-semibold text-green-900">PAYMENT LINK READY</h3>
           </div>
           <p className="text-sm text-green-700 mb-4">Click below to open the payment link in a new tab.</p>
-          <a
+          {paymentLink ? <div className="flex flex-wrap items-center gap-3"><a
             href={paymentLink}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-3 font-semibold text-white hover:bg-green-700 transition-colors"
           >
-            Open Payment Link Ã¢â€ â€™
-          </a>
+            PAY NOW
+          </a><button type="button" onClick={() => void copyPaymentLink()} className="rounded-lg border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-900 hover:bg-green-100">{copyStatus}</button></div> : <p className="font-medium text-amber-800">Payment link was requested, but no payment URL was returned by the provider.</p>}
           <p className="mt-4 text-sm text-green-700">
             <span className="font-semibold">Provider:</span> Razorpay Test Mode
           </p>
@@ -482,6 +503,14 @@ function DecisionResult({ result }: { result: RecoveryWorkflowResponse }) {
       </div>
     </div>
   );
+}
+
+function actionStatus(action: RecoveryWorkflowResponse["action"]): string {
+  return { RETRY: "Retry payment", REMINDER: "Reminder queued", ESCALATE: "Manual review required", STOP: "Recovery stopped", PAYMENT_LINK: "Ready for payment" }[action];
+}
+
+function actionStatusClasses(action: RecoveryWorkflowResponse["action"]): string {
+  return { RETRY: "border-sky-200 bg-sky-50 text-sky-900", REMINDER: "border-amber-200 bg-amber-50 text-amber-900", ESCALATE: "border-orange-200 bg-orange-50 text-orange-900", STOP: "border-rose-200 bg-rose-50 text-rose-900", PAYMENT_LINK: "border-emerald-200 bg-emerald-50 text-emerald-900" }[action];
 }
 
 function TextBlock({ label, value }: { label: string; value: string }) { return <div><p className="font-semibold">{label}</p><p className="mt-1 leading-6 text-slate-600">{value}</p></div>; }

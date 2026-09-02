@@ -26,7 +26,7 @@ export interface RecoveryActionResult {
   mode: "dry_run";
   status: "queued" | "terminal";
   message: string;
-  payment_link: string | null;
+  payment_link?: string | null;
 }
 
 export interface RecoveryDecision {
@@ -106,29 +106,73 @@ export async function evaluateRecovery(
     throw new Error(message ?? `Recovery evaluation failed (${response.status}).`);
   }
 
-  if (!isRecoveryWorkflowResponse(body)) {
+  const normalized = normalizeRecoveryWorkflowResponse(body);
+  if (!normalized) {
     throw new Error("Backend returned an invalid recovery response.");
   }
-  return body;
+  return normalized;
 }
 
 function isErrorBody(body: unknown): body is { detail?: string | { message?: string } } {
   return typeof body === "object" && body !== null && "detail" in body;
 }
 
-function isRecoveryWorkflowResponse(body: unknown): body is RecoveryWorkflowResponse {
-  if (typeof body !== "object" || body === null) return false;
-  const response = body as Record<string, unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRecoveryAction(value: unknown): value is RecoveryAction {
+  return value === "PAYMENT_LINK" || value === "RETRY" || value === "REMINDER" || value === "ESCALATE" || value === "STOP";
+}
+
+export function extractPaymentLink(data: unknown): string | null {
+  if (!isRecord(data)) return null;
+  const candidates = [
+    data.payment_link,
+    isRecord(data.result) ? data.result.payment_link : undefined,
+    isRecord(data.backend_response) ? data.backend_response.payment_link : undefined,
+    isRecord(data.backend_response) && isRecord(data.backend_response.result) ? data.backend_response.result.payment_link : undefined,
+    isRecord(data.backend_response) && isRecord(data.backend_response.data) ? data.backend_response.data.payment_link : undefined,
+    isRecord(data.backend_response) && isRecord(data.backend_response.body) ? data.backend_response.body.payment_link : undefined,
+  ];
+  const paymentLink = candidates.find((candidate): candidate is string => {
+    if (typeof candidate !== "string") return false;
+    try {
+      const url = new URL(candidate);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  });
+  return paymentLink ?? null;
+}
+
+function normalizeRecoveryWorkflowResponse(body: unknown): RecoveryWorkflowResponse | null {
+  if (!isRecord(body)) return null;
+  const response = isRecord(body.backend_response) ? body.backend_response : body;
+  const result = isRecord(response.result) ? response.result : response;
+  const action = response.action ?? result.action;
+  if (!isRecoveryAction(action)) return null;
+
+  const normalized: Record<string, unknown> = {
+    ...response,
+    action,
+    result: {
+      ...result,
+      action,
+      payment_link: extractPaymentLink(body),
+    },
+  };
+
   return (
-    typeof response.payment_id === "string" &&
-    typeof response.risk_score === "number" &&
-    typeof response.eligible === "boolean" &&
-    typeof response.action === "string" &&
-    typeof response.decision === "object" &&
-    response.decision !== null &&
-    typeof response.result === "object" &&
-    response.result !== null
-  );
+    typeof normalized.payment_id === "string" &&
+    typeof normalized.risk_score === "number" &&
+    typeof normalized.eligible === "boolean" &&
+    typeof normalized.decision === "object" &&
+    normalized.decision !== null &&
+    typeof normalized.result === "object" &&
+    normalized.result !== null
+  ) ? normalized as unknown as RecoveryWorkflowResponse : null;
 }
 
 export async function fetchRecoveryHistory(
