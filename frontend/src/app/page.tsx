@@ -232,9 +232,9 @@ export default function Home() {
           {historyError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{historyError}</div>}
           {!historyLoading && !historyError && history.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No persisted recovery activity yet.</p>}
           {!historyLoading && !historyError && history.length > 0 && (
-            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(260px,0.8fr)]">
+            <div className="mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]">
               <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full min-w-[980px] text-left text-sm">
+                <table className="w-full min-w-[760px] table-fixed text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-3 py-3">Payment ID</th>
@@ -242,13 +242,8 @@ export default function Home() {
                       <th className="px-3 py-3">Action</th>
                       <th className="px-3 py-3">Status</th>
                       <th className="px-3 py-3">Recovery state</th>
-                      <th className="px-3 py-3">Amount</th>
-                      <th className="px-3 py-3">Attempt</th>
-                      <th className="px-3 py-3">Execution mode</th>
-                      <th className="px-3 py-3">Provider called</th>
-                      <th className="px-3 py-3">Execution success</th>
-                      <th className="px-3 py-3">Notification</th>
-                      <th className="px-3 py-3">Timestamp</th>
+                      <th className="px-3 py-3">Risk</th>
+                      <th className="px-3 py-3">Created</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -256,18 +251,13 @@ export default function Home() {
                       const isSelected = selectedHistoryRecord && `${record.payment_id}-${record.event_id ?? record.created_at}` === `${selectedHistoryRecord.payment_id}-${selectedHistoryRecord.event_id ?? selectedHistoryRecord.created_at}`;
                       return (
                         <tr key={record.event_id ?? `${record.payment_id}-${record.created_at}`} onClick={() => setSelectedHistoryRecord(record)} className={`cursor-pointer border-b border-slate-100 last:border-0 transition-colors ${isSelected ? "bg-slate-100 hover:bg-slate-100" : "hover:bg-slate-50"}`}>
-                          <td className="px-3 py-3 font-mono text-xs">{record.payment_id}</td>
-                          <td className="px-3 py-3 font-mono text-xs">{record.event_id ?? "-"}</td>
-                          <td className="px-3 py-3 font-semibold">{record.action}</td>
+                          <td className="max-w-0 px-3 py-3 font-mono text-xs"><span className="block truncate" title={record.payment_id}>{record.payment_id}</span></td>
+                          <td className="max-w-0 px-3 py-3 font-mono text-xs"><span className="block truncate" title={record.event_id ?? "Unavailable"}>{record.event_id ?? "-"}</span></td>
+                          <td className="px-3 py-3"><ActionBadge action={record.action} /></td>
                           <td className="px-3 py-3"><span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium">{record.status}</span></td>
                           <td className="px-3 py-3">{record.recovery_state ?? "Not recorded"}</td>
-                          <td className="px-3 py-3">{formatCurrency(record.amount)}</td>
-                          <td className="px-3 py-3">{record.attempt_number ?? "-"}</td>
-                          <td className="px-3 py-3">{record.execution_mode ?? "dry_run"}</td>
-                          <td className="px-3 py-3">{record.provider_called ? "Yes" : "No"}</td>
-                          <td className="px-3 py-3">{record.execution_succeeded === undefined ? "Unrecorded" : record.execution_succeeded ? "Yes" : "No"}</td>
-                          <td className="px-3 py-3">{record.notification_generated ? "Yes" : "No"}</td>
-                          <td className="px-3 py-3 whitespace-nowrap">{formatTimestamp(record.executed_at ?? record.created_at)}</td>
+                          <td className="px-3 py-3">{record.risk_score == null ? "-" : `${record.risk_score}/100`}</td>
+                          <td className="px-3 py-3 whitespace-nowrap text-xs text-slate-500">{formatTimestamp(record.created_at)}</td>
                         </tr>
                       );
                     })}
@@ -341,27 +331,29 @@ function AuditPanel({ record }: { record: RecoveryHistoryRecord }) {
         <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">{record.status}</span>
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm">
-        <DetailRow label="Payment ID" value={record.payment_id} />
-        <DetailRow label="Event ID" value={record.event_id ?? "Unavailable"} />
-        <DetailRow label="Amount" value={formatCurrency(record.amount)} />
-        <DetailRow label="Attempt" value={record.attempt_number ?? "Unavailable"} />
-        <DetailRow label="Action" value={record.action} />
-        <DetailRow label="Status" value={record.status} />
-        <DetailRow label="Recovery state" value={record.recovery_state ?? "Not recorded"} />
-        <DetailRow label="Risk score" value={record.risk_score == null ? "Not recorded" : `${record.risk_score}/100 (${record.risk_level ?? "unclassified"})`} />
-        <DetailRow label="Eligibility" value={record.eligibility_result == null ? "Not recorded" : record.eligibility_result ? "Eligible" : "Not eligible"} />
-        <DetailRow label="Confidence" value={record.decision_confidence == null ? "Not recorded" : `${Math.round(record.decision_confidence * 100)}%`} />
-        <DetailRow label="Approval required" value={record.approval_required == null ? "Not recorded" : record.approval_required ? "Yes" : "No"} />
-        <DetailRow label="Validation" value={record.validation_status ?? "Not recorded"} />
-        <DetailRow label="Execution mode" value={record.execution_mode ?? "dry_run"} />
-        <DetailRow label="Provider called" value={record.provider_called === undefined ? "Unrecorded" : record.provider_called ? "Yes" : "No"} />
-        <DetailRow label="Execution succeeded" value={record.execution_succeeded === undefined ? "Unrecorded" : record.execution_succeeded ? "Yes" : "No"} />
-        <DetailRow label="Notification generated" value={record.notification_generated ? "Yes" : "No"} />
-        <DetailRow label="Created" value={formatTimestamp(record.created_at)} />
-        <DetailRow label="Executed" value={record.executed_at ? formatTimestamp(record.executed_at) : "Not recorded"} />
-        <DetailRow label="Completed" value={record.completed_at ? formatTimestamp(record.completed_at) : "Not recorded"} />
-      </div>
+      <AuditSection title="Payment" items={[
+        ["Payment ID", record.payment_id], ["Event ID", record.event_id ?? "Unavailable"],
+        ["Amount", formatCurrency(record.amount)], ["Attempt", record.attempt_number ?? "Unavailable"],
+      ]} />
+      <AuditSection title="Recovery decision" items={[
+        ["Action", record.action], ["Status", record.status], ["Recovery state", record.recovery_state ?? "Not recorded"],
+        ["Risk score", record.risk_score == null ? "Not recorded" : `${record.risk_score}/100 (${record.risk_level ?? "unclassified"})`],
+        ["Eligibility", record.eligibility_result == null ? "Not recorded" : record.eligibility_result ? "Eligible" : "Not eligible"],
+        ["Confidence", record.decision_confidence == null ? "Not recorded" : `${Math.round(record.decision_confidence * 100)}%`],
+        ["Approval required", record.approval_required == null ? "Not recorded" : record.approval_required ? "Yes" : "No"],
+        ["Validation", record.validation_status ?? "Not recorded"],
+      ]} />
+      <AuditSection title="Execution" items={[
+        ["Execution mode", record.execution_mode ?? "dry_run"],
+        ["Provider called", record.provider_called === undefined ? "Unrecorded" : record.provider_called ? "Yes" : "No"],
+        ["Execution succeeded", record.execution_succeeded === undefined ? "Unrecorded" : record.execution_succeeded ? "Yes" : "No"],
+        ["Notification generated", record.notification_generated ? "Yes" : "No"],
+      ]} />
+      <AuditSection title="Timeline" items={[
+        ["Created", formatTimestamp(record.created_at)],
+        ["Executed", record.executed_at ? formatTimestamp(record.executed_at) : "Not recorded"],
+        ["Completed", record.completed_at ? formatTimestamp(record.completed_at) : "Not recorded"],
+      ]} />
 
       <div className="mt-6 rounded-md border border-slate-200 bg-white p-3">
         <p className="text-sm font-semibold">Decision / reasoning</p>
@@ -391,13 +383,13 @@ function AuditPanel({ record }: { record: RecoveryHistoryRecord }) {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-      <span className="text-xs font-medium uppercase tracking-[0.08em] text-slate-500">{label}</span>
-      <span className="text-right text-sm font-medium text-slate-800">{String(value)}</span>
-    </div>
-  );
+function AuditSection({ title, items }: { title: string; items: Array<[string, string | number]> }) {
+  return <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3"><h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{title}</h4><dl className="mt-2 grid gap-2 sm:grid-cols-2">{items.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-[11px] text-slate-500">{label}</dt><dd className="break-words text-sm font-medium text-slate-800" title={String(value)}>{String(value)}</dd></div>)}</dl></section>;
+}
+
+function ActionBadge({ action }: { action: RecoveryHistoryRecord["action"] }) {
+  const classes = { PAYMENT_LINK: "border-emerald-200 bg-emerald-50 text-emerald-800", RETRY: "border-sky-200 bg-sky-50 text-sky-800", REMINDER: "border-amber-200 bg-amber-50 text-amber-800", ESCALATE: "border-orange-200 bg-orange-50 text-orange-800", STOP: "border-rose-200 bg-rose-50 text-rose-800" };
+  return <span className={`inline-flex max-w-full rounded-full border px-2 py-1 text-xs font-semibold ${classes[action]}`}><span className="truncate">{action}</span></span>;
 }
 
 function parsePolicyConstraints(value: string | null | undefined): string[] {
@@ -427,7 +419,7 @@ function DecisionResult({ result, payment }: { result: RecoveryWorkflowResponse;
     }
   }
 
-  const details = [
+  const details: Array<[string, string]> = [
     ["Payment ID", result.payment_id],
     ["Amount", formatCurrency(Number(payment.amount))],
     ["Currency", payment.currency],
@@ -480,25 +472,24 @@ function DecisionResult({ result, payment }: { result: RecoveryWorkflowResponse;
         </div>
       )}
 
-      <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {details.map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
-            <dd className="mt-1 text-sm font-semibold">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <InfoSection title="Payment summary" items={details.slice(0, 7)} />
+        <InfoSection title="Risk & eligibility" items={details.slice(7)} />
+      </div>
 
-      <div className="mt-6 space-y-5 text-sm">
-        <TextBlock label="Diagnosis" value={decision.diagnosis} />
-        <TextBlock label="Reasoning" value={decision.reasoning} />
-        <TextBlock label="Expected outcome" value={decision.expected_outcome} />
-        <ListBlock label="Risk factors" items={decision.validation_notes} />
-        <ListBlock label="Policy constraints" items={decision.policy_constraints} />
-        <div className="rounded-md bg-slate-50 p-4">
-          <p className="font-semibold">Dry-run result</p>
-          <p className="mt-1 text-slate-600">{result.result.message}</p>
-          <p className="mt-2 text-xs font-medium uppercase text-slate-500">Status: {result.result.status}</p>
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h3 className="text-sm font-semibold text-slate-900">Decision / reasoning</h3>
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <TextBlock label="Diagnosis" value={decision.diagnosis} />
+          <TextBlock label="Reasoning" value={decision.reasoning} />
+          <TextBlock label="Expected outcome" value={decision.expected_outcome} />
+        </div>
+        <div className="mt-4 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
+          <ListBlock label="Risk factors" items={decision.validation_notes} />
+          <ListBlock label="Policy constraints" items={decision.policy_constraints} />
+        </div>
+        <div className="mt-4 border-t border-slate-200 pt-3 text-sm">
+          <span className="font-semibold">Action execution:</span> <span className="text-slate-600">{result.result.message}</span>
         </div>
       </div>
     </div>
@@ -511,6 +502,10 @@ function actionStatus(action: RecoveryWorkflowResponse["action"]): string {
 
 function actionStatusClasses(action: RecoveryWorkflowResponse["action"]): string {
   return { RETRY: "border-sky-200 bg-sky-50 text-sky-900", REMINDER: "border-amber-200 bg-amber-50 text-amber-900", ESCALATE: "border-orange-200 bg-orange-50 text-orange-900", STOP: "border-rose-200 bg-rose-50 text-rose-900", PAYMENT_LINK: "border-emerald-200 bg-emerald-50 text-emerald-900" }[action];
+}
+
+function InfoSection({ title, items }: { title: string; items: Array<[string, string]> }) {
+  return <section className="rounded-xl border border-slate-200 bg-slate-50 p-4"><h3 className="text-sm font-semibold text-slate-900">{title}</h3><dl className="mt-3 grid gap-3 sm:grid-cols-2">{items.map(([label, value]) => <div className="min-w-0" key={label}><dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-800">{value}</dd></div>)}</dl></section>;
 }
 
 function TextBlock({ label, value }: { label: string; value: string }) { return <div><p className="font-semibold">{label}</p><p className="mt-1 leading-6 text-slate-600">{value}</p></div>; }
